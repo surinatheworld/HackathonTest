@@ -6,6 +6,19 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình t
 
 > Trạng thái: contract đã viết và có test (11/11 pass), chạy end-to-end offline bằng `npm run local`. Deploy lên Fuji + Game L1 làm theo [docs/DEPLOY.md](docs/DEPLOY.md).
 
+## Đã deploy trên Fuji C-Chain
+
+Owner của mọi contract là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 58 giây. Source đã được verify trên Snowtrace.
+
+| Contract | Địa chỉ |
+|---|---|
+| FarmVault | [`0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D`](https://testnet.snowtrace.io/address/0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D#code) |
+| MockUSDC | [`0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b`](https://testnet.snowtrace.io/address/0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b#code) |
+| ButlerAccount | [`0xF92c04C7813cdD742Dd1a73B791658edC88EacA1`](https://testnet.snowtrace.io/address/0xF92c04C7813cdD742Dd1a73B791658edC88EacA1#code) |
+| FarmLand (Farm L1) | chưa deploy |
+
+FarmVault này được build từ commit `7484ec8`, khi `requiredGasLimit` mặc định còn là 400k. Bước 4 của deploy.html sẽ nâng giá trị này lên 1.000.000 lúc nối với L1.
+
 ## Cấu trúc
 
 ```
