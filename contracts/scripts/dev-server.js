@@ -8,7 +8,7 @@ const path = require("path");
 const { ethers } = require("ethers");
 
 const ROOT = path.join(__dirname, "..");
-const WEB = path.join(ROOT, "..", "prototype");
+const WEB = path.join(ROOT, "..");
 const PORT = Number(process.env.PORT || 8790);
 const RPC_PORT = Number(process.env.RPC_PORT || 8545);
 const RPC = `http://127.0.0.1:${RPC_PORT}`;
@@ -92,13 +92,16 @@ async function main() {
         }
         return;
       }
-      if (url.pathname === "/chain-config.js") {
+      if (url.pathname === "/prototype/chain-config.js") {
         res.writeHead(200, { "content-type": TYPES[".js"], "cache-control": "no-store" });
         res.end(configJs(d));
         return;
       }
-      const file = path.join(WEB, url.pathname === "/" ? "index.html" : path.normalize(url.pathname).replace(/^([/\\])+/, ""));
-      if (!file.startsWith(WEB) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      // Serve only the game: index.html and prototype/. Never the rest of the repo (contracts/.env).
+      const rel = url.pathname === "/" ? "index.html" : path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "");
+      const file = path.join(WEB, rel);
+      const allowed = rel === "index.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
+      if (!allowed || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
         res.writeHead(404);
         res.end("Not found");
         return;

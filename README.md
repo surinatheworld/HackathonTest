@@ -16,7 +16,8 @@ contracts/                 Hardhat project
   contracts/ICMApp.sol             Ghép cặp 2 contract qua TeleporterMessenger
   test/farm.test.js                Luồng ICM hai chiều, lending, game loop, guardrail
   scripts/                         deploy, link, smoke test, butler demo, local dev server
-prototype/                 Game 2D (canvas) + chain.js (ethers v6) + chain-config.js
+index.html                 Game 2D (canvas), mở thẳng hoặc qua GitHub Pages
+prototype/                 chain.js (ethers v6) + chain-config.js cho chế độ on-chain
 docs/DEPLOY.md             Hướng dẫn L1 + ICM Relayer trên Builder Console
 ```
 
@@ -29,7 +30,7 @@ npm test          # 11 test
 npm run local     # mở http://localhost:8790/?wallet=dev
 ```
 
-Chỉ xem giao diện mô phỏng: mở thẳng `prototype/index.html`.
+Chỉ xem giao diện mô phỏng: mở thẳng `index.html`.
 
 - Di chuyển: `WASD` / phím mũi tên, hoặc chạm vào một khu trên bản đồ để nhân vật tự đi tới.
 - Tương tác: đứng cạnh biển gỗ rồi bấm `E` (hoặc nút vàng ở dưới).

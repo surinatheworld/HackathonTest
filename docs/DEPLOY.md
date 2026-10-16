@@ -99,7 +99,7 @@ Quản gia AI gửi tiền vào Ruộng rau trong hạn mức. Sau đó thử m�
 
 ## 8. Chơi trên testnet
 
-Mở `prototype/index.html` qua một static server, ví dụ GitHub Pages hoặc `npx serve prototype`. Bấm **Kết nối ví** (Core hoặc MetaMask). Ví sẽ tự thêm Fuji và Farm L1 nếu chưa có.
+Mở `index.html` qua GitHub Pages (Settings → Pages → nhánh `main`, thư mục gốc). Đừng chạy `npx serve` ở thư mục gốc trên máy mình, vì nó sẽ phục vụ luôn `contracts/.env`; chạy local thì dùng `npm run local`. Bấm **Kết nối ví** (Core hoặc MetaMask). Ví sẽ tự thêm Fuji và Farm L1 nếu chưa có.
 
 - **Ruộng rau**: deposit, claim, withdraw thật trên Fuji.
 - **Vườn cây**: trồng trên L1, thư ICM sang Fuji khóa USDC, biên nhận về L1. Có thêm tưới, nhổ sớm, thu hoạch.
@@ -113,7 +113,7 @@ Mở `prototype/index.html` qua một static server, ví dụ GitHub Pages hoặ
 | Game L1 dựng bằng Avalanche tooling: plot, crop, lớn theo thời gian | `FarmLand.sol` trên Farm L1 tạo từ Builder Console |
 | Vault trên C-Chain với 3 tier khóa (mock yield) | `FarmVault.sol`: 7 / 30 / 90 ngày, 6 / 9 / 14%, quỹ thưởng tài trợ |
 | Một luồng ICM: trồng trên L1 → deposit trên C-Chain, thu hoạch → claim yield | PLANT / PLANTED, HARVEST / HARVESTED, hai chiều, có test |
-| Frontend game 2D + dev toggle nén thời gian | `prototype/`, `DAY_LENGTH` |
+| Frontend game 2D + dev toggle nén thời gian | `index.html`, `prototype/`, `DAY_LENGTH` |
 | Chạy trên Avalanche (L1 riêng, Fuji hoặc C-Chain) | Fuji C-Chain + Farm L1 |
 | Demo được | `npm run local` (offline) và testnet |
 | Bonus | ButlerAccount (agent guardrail, kill switch), tưới / streak / trộm điểm trên L1 |
