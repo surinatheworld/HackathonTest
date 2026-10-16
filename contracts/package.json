@@ -20,7 +20,9 @@
     "test:fork": "node -e \"process.env.FORK_FUJI=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'test','test/fork/fuji.fork.js'],{stdio:'inherit',env:process.env})\"",
     "relayer": "node scripts/relayer.js",
     "handover:fuji": "hardhat run scripts/handover.js --network fuji",
-    "handover:l1": "hardhat run scripts/handover.js --network farml1"
+    "handover:l1": "hardhat run scripts/handover.js --network farml1",
+    "deploy:gasless": "hardhat run scripts/deploy-gasless.js --network fuji",
+    "smoke:gasless": "node scripts/gasless-smoke.js"
   },
   "license": "MIT",
   "type": "commonjs",

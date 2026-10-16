@@ -1,8 +1,9 @@
-// Wallet + contract layer for Nông Trại DeFi. Exposes window.FarmChain.
-// Needs ethers v6 (UMD) and window.FARM_CONFIG from chain-config.js.
+// Wallet + contract layer for Nông Trại DeFi on Fuji C-Chain. Exposes window.FarmChain.
+// Gasless: every action is an EIP-712 ForwardRequest signed by the player and submitted by the fee
+// manager (/api/relay) through FarmForwarder. Wallets: an in-game wallet (key kept in this browser,
+// testnet only) or MetaMask/Core. Needs ethers v6 (UMD) and window.FARM_CONFIG from chain-config.js.
 (() => {
-  // Committed config first; otherwise the one deploy.html saved in this browser.
-  const cfg = window.FARM_CONFIG || (() => { try { return JSON.parse(localStorage.getItem("farm-config")); } catch { return null; } })();
+  const cfg = window.FARM_CONFIG;
   const E = window.ethers;
   const ABI = {
     usdc: [
@@ -11,19 +12,13 @@
       "function approve(address,uint256) returns (bool)",
       "function faucet()",
     ],
-    vault: [
+    game: [
       "function deposit(uint256)",
       "function withdraw(uint256)",
       "function claim() returns (uint256)",
       "function pendingYield(address) view returns (uint256)",
       "function lends(address) view returns (uint256 principal, uint256 accrued, uint64 last)",
       "function rewardReserve() view returns (uint256)",
-      "function locks(uint256) view returns (address user, uint8 tier, bool open, uint64 start, uint256 amount)",
-      "function isRipe(uint256) view returns (bool)",
-      "function claimLock(uint256 cropId)",
-      "function exitLock(uint256 cropId)",
-    ],
-    land: [
       "function plant(uint8 tier, uint256 amount) returns (uint256)",
       "function harvest(uint256 cropId)",
       "function uproot(uint256 cropId)",
@@ -34,184 +29,234 @@
       "function today() view returns (uint64)",
       "function cropsOf(address) view returns (uint256[] ids, tuple(address owner, uint8 tier, uint8 status, uint64 plantedAt, uint64 lastWateredDay, uint256 amount, uint256 payout)[] list)",
       "function farmers(address) view returns (uint256 points, uint256 ripePoints, uint32 streak, uint64 lastWaterDay, uint64 lastStealDay, bool guarded, uint16 activeCrops)",
-      "event Planted(uint256 indexed cropId, address indexed owner, uint8 tier, uint256 amount)",
+    ],
+    forwarder: ["function nonces(address) view returns (uint256)"],
+  };
+  const STATUS = ["None", "Growing", "Harvested", "Uprooted"];
+  const TYPES = {
+    ForwardRequest: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "gas", type: "uint256" },
+      { name: "nonce", type: "uint256" },
+      { name: "deadline", type: "uint48" },
+      { name: "data", type: "bytes" },
     ],
   };
-  const STATUS = ["None", "Pending", "Growing", "Harvesting", "Harvested", "Uprooted", "Failed"];
+  const GAS = { plant: 300_000, harvest: 250_000, uproot: 200_000, water: 120_000, small: 120_000, lend: 250_000, usdc: 120_000 };
+  const KEY = "farm-wallet-v1";
   const U = (v) => E.parseUnits(String(v), 6);
   const toNum = (v) => Number(E.formatUnits(v, 6));
 
-  const CH = { available: false, live: false, account: null, data: null, busy: null, reason: "", cfg, STATUS, hasL1: !!(cfg && cfg.l1) };
+  const CH = { available: false, live: false, account: null, data: null, busy: null, reason: "", cfg, STATUS, hasL1: true, walletKind: null, gasless: null };
   const listeners = [];
   CH.on = (fn) => listeners.push(fn);
   const emit = () => listeners.forEach((f) => { try { f(CH); } catch (e) { console.error(e); } });
 
-  if (!cfg) CH.reason = "Chưa có địa chỉ contract. Chạy npm run deploy trong thư mục contracts/ để sinh chain-config.js.";
+  if (!cfg || !cfg.cchain?.game) CH.reason = "Chưa có địa chỉ contract (prototype/chain-config.js).";
   else if (!E) CH.reason = "Không tải được thư viện ethers.js.";
-  else if (!window.ethereum) CH.reason = "Không thấy ví trình duyệt. Cài Core Wallet hoặc MetaMask rồi tải lại trang.";
   else CH.available = true;
+  CH.hasMetaMask = !!window.ethereum;
   window.FarmChain = CH;
-  if (!cfg || !E) return;
+  if (!CH.available) return;
 
-  const rc = new E.JsonRpcProvider(cfg.cchain.rpc, cfg.cchain.chainId, { staticNetwork: true });
-  const rl = CH.hasL1 ? new E.JsonRpcProvider(cfg.l1.rpc, cfg.l1.chainId, { staticNetwork: true }) : null;
-  const usdcR = new E.Contract(cfg.cchain.usdc, ABI.usdc, rc);
-  const vaultR = new E.Contract(cfg.cchain.vault, ABI.vault, rc);
-  const landR = CH.hasL1 ? new E.Contract(cfg.l1.land, ABI.land, rl) : null;
+  const c = cfg.cchain;
+  const rp = new E.JsonRpcProvider(c.rpc, c.chainId, { staticNetwork: true });
+  const usdcR = new E.Contract(c.usdc, ABI.usdc, rp);
+  const gameR = new E.Contract(c.game, ABI.game, rp);
+  const fwdR = new E.Contract(c.forwarder, ABI.forwarder, rp);
+  const usdcI = new E.Interface(ABI.usdc);
+  const gameI = new E.Interface(ABI.game);
+  const domain = { name: "NongTraiDeFi", version: "1", chainId: c.chainId, verifyingContract: c.forwarder };
+  const relayUrl = cfg.relayUrl || "/api/relay";
+  let signer = null;
 
-  async function switchTo(net) {
-    const chainId = "0x" + net.chainId.toString(16);
+  // ---------- fee manager status ----------
+  CH.checkRelay = async () => {
+    try {
+      const r = await fetch(relayUrl, { cache: "no-store" });
+      const j = await r.json();
+      CH.gasless = !!j.ready;
+      CH.relayInfo = j;
+    } catch {
+      CH.gasless = false;
+    }
+    emit();
+    return CH.gasless;
+  };
+
+  // ---------- wallets ----------
+  function loadGameWallet() {
+    let pk = null;
+    try { pk = localStorage.getItem(KEY); } catch {}
+    if (!pk) {
+      pk = E.Wallet.createRandom().privateKey;
+      try { localStorage.setItem(KEY, pk); } catch {}
+    }
+    return new E.Wallet(pk, rp);
+  }
+  CH.hasSavedGameWallet = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
+  CH.exportKey = () => (CH.walletKind === "game" ? signer.privateKey : null);
+  CH.importKey = (pk) => {
+    const w = new E.Wallet(pk.trim());
+    try { localStorage.setItem(KEY, w.privateKey); } catch {}
+    return w.address;
+  };
+
+  async function switchToFuji() {
+    const chainId = "0x" + c.chainId.toString(16);
     try {
       await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
     } catch (e) {
       if (e.code !== 4902 && !/unrecognized|not added|unknown chain/i.test(e.message || "")) throw e;
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
-        params: [{
-          chainId,
-          chainName: net.name,
-          rpcUrls: [net.rpc],
-          nativeCurrency: { name: net.currency, symbol: net.currency, decimals: 18 },
-          blockExplorerUrls: net.explorer ? [net.explorer] : undefined,
-        }],
+        params: [{ chainId, chainName: c.name, rpcUrls: [c.rpc], nativeCurrency: { name: "AVAX", symbol: "AVAX", decimals: 18 }, blockExplorerUrls: c.explorer ? [c.explorer] : undefined }],
       });
     }
   }
 
-  async function signer(netKey) {
-    if (!cfg[netKey]) throw new Error("Chưa nối Game L1. Hoàn tất bước 3 và 4 trong deploy.html.");
-    await switchTo(cfg[netKey]);
-    return new E.BrowserProvider(window.ethereum).getSigner();
-  }
-
-  // Wallet requests go one at a time; later clicks wait in line instead of failing.
-  let queue = Promise.resolve();
-  function run(label, netKey, fn) {
-    const job = queue.then(() => exec(label, netKey, fn));
-    queue = job.catch(() => {});
-    return job;
-  }
-
-  async function exec(label, netKey, fn) {
-    CH.busy = label;
-    emit();
-    try {
-      const s = await signer(netKey);
-      const tx = await fn(s);
-      CH.lastTx = { hash: tx.hash, net: netKey, label };
-      emit();
-      return await tx.wait();
-    } finally {
-      CH.busy = null;
-      emit();
-      // Refresh after the caller's .then() has logged the sent tx, so receipts appear after it.
-      setTimeout(() => CH.refresh().catch(() => {}), 0);
+  CH.connect = async (kind = "game") => {
+    if (kind === "metamask") {
+      if (!window.ethereum) throw new Error("Không thấy MetaMask/Core. Dùng Ví trong game cho nhanh.");
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      await switchToFuji();
+      signer = await new E.BrowserProvider(window.ethereum).getSigner();
+      window.ethereum.on?.("accountsChanged", async (a) => {
+        if (!a[0]) return CH.disconnect();
+        signer = await new E.BrowserProvider(window.ethereum).getSigner();
+        CH.account = await signer.getAddress();
+        CH.refresh().catch(() => {});
+      });
+    } else {
+      signer = loadGameWallet();
     }
-  }
-
-  async function ensureAllowance(amount) {
-    const have = await usdcR.allowance(CH.account, cfg.cchain.vault);
-    if (have >= amount) return;
-    await run("Cho phép FarmVault dùng USDC (Fuji)", "cchain", (s) =>
-      new E.Contract(cfg.cchain.usdc, ABI.usdc, s).approve(cfg.cchain.vault, E.MaxUint256)
-    );
-  }
-
-  CH.connect = async () => {
-    const acc = await window.ethereum.request({ method: "eth_requestAccounts" });
-    CH.account = E.getAddress(acc[0]);
+    CH.walletKind = kind;
+    CH.account = E.getAddress(await signer.getAddress());
     CH.live = true;
-    window.ethereum.on?.("accountsChanged", (a) => {
-      CH.account = a[0] ? E.getAddress(a[0]) : null;
-      CH.live = !!a[0];
-      CH.refresh().catch(() => {});
-    });
-    await CH.refresh();
+    await Promise.all([CH.refresh(), CH.checkRelay()]);
     clearInterval(CH._timer);
-    CH._timer = setInterval(() => CH.refresh().catch(() => {}), 5000);
+    CH._timer = setInterval(() => CH.refresh().catch(() => {}), 6000);
     return CH.account;
+  };
+
+  CH.disconnect = () => {
+    clearInterval(CH._timer);
+    signer = null;
+    CH.live = false;
+    CH.account = null;
+    CH.data = null;
+    CH.walletKind = null;
+    emit();
   };
 
   CH.refresh = async () => {
     if (!CH.live || !CH.account) { emit(); return; }
     const a = CH.account;
-    const [usdc, avax, lend, pending, reserve, crops, farmer, today, l1gas] = await Promise.all([
-      usdcR.balanceOf(a),
-      rc.getBalance(a),
-      vaultR.lends(a),
-      vaultR.pendingYield(a),
-      vaultR.rewardReserve(),
-      landR ? landR.cropsOf(a) : { ids: [], list: [] },
-      landR ? landR.farmers(a) : { points: 0n, ripePoints: 0n, streak: 0n, guarded: false },
-      landR ? landR.today() : 0n,
-      rl ? rl.getBalance(a) : 0n,
+    const [usdc, avax, lend, pending, reserve, crops, farmer, today] = await Promise.all([
+      usdcR.balanceOf(a), rp.getBalance(a), gameR.lends(a), gameR.pendingYield(a), gameR.rewardReserve(),
+      gameR.cropsOf(a), gameR.farmers(a), gameR.today(),
     ]);
-    // FarmVault on C-Chain is the source of truth for money; the L1 crop state is optimistic.
-    const ids = crops.ids.map(Number);
-    const lockList = await Promise.all(ids.map((id) => vaultR.locks(id).catch(() => null)));
-    const ripeList = await Promise.all(ids.map((id, i) => (lockList[i]?.open ? vaultR.isRipe(id).catch(() => false) : false)));
     CH.data = {
       usdc: toNum(usdc),
       avax: Number(E.formatEther(avax)),
-      l1gas: Number(E.formatEther(l1gas)),
       lendPrincipal: toNum(lend.principal),
       lendPending: toNum(pending),
       reserve: toNum(reserve),
       today: Number(today),
-      farmer: {
-        points: Number(farmer.points),
-        ripePoints: Number(farmer.ripePoints),
-        streak: Number(farmer.streak),
-        guarded: farmer.guarded,
-      },
+      farmer: { points: Number(farmer.points), ripePoints: Number(farmer.ripePoints), streak: Number(farmer.streak), guarded: farmer.guarded },
       crops: crops.ids.map((id, i) => {
-        const c = crops.list[i];
+        const x = crops.list[i];
         return {
-          id: Number(id),
-          tier: Number(c.tier),
-          days: [7, 30, 90][Number(c.tier)],
-          status: STATUS[Number(c.status)],
-          plantedAt: Number(c.plantedAt),
-          lastWateredDay: Number(c.lastWateredDay),
-          amount: toNum(c.amount),
-          payout: toNum(c.payout),
-          lock: lockList[i]
-            ? { exists: Number(lockList[i].start) > 0, open: lockList[i].open, start: Number(lockList[i].start), ripe: ripeList[i] }
-            : { exists: false, open: false, start: 0, ripe: false },
+          id: Number(id), tier: Number(x.tier), days: [7, 30, 90][Number(x.tier)], status: STATUS[Number(x.status)],
+          plantedAt: Number(x.plantedAt), lastWateredDay: Number(x.lastWateredDay), amount: toNum(x.amount), payout: toNum(x.payout),
         };
       }),
     };
     emit();
   };
 
-  CH.faucet = () => run("Nhận 1.000 USDC test (Fuji)", "cchain", (s) => new E.Contract(cfg.cchain.usdc, ABI.usdc, s).faucet());
-  CH.lendDeposit = async (v) => {
-    await ensureAllowance(U(v));
-    return run("Gieo hạt vào ruộng rau (Fuji)", "cchain", (s) => new E.Contract(cfg.cchain.vault, ABI.vault, s).deposit(U(v)));
-  };
-  CH.lendClaim = () => run("Thu lãi ruộng rau (Fuji)", "cchain", (s) => new E.Contract(cfg.cchain.vault, ABI.vault, s).claim());
-  CH.lendWithdraw = (v) => run("Rút khỏi ruộng rau (Fuji)", "cchain", (s) => new E.Contract(cfg.cchain.vault, ABI.vault, s).withdraw(U(v)));
-  CH.plant = async (tier, v) => {
-    await ensureAllowance(U(v));
-    return run("Trồng cây trên Game L1", "l1", (s) => new E.Contract(cfg.l1.land, ABI.land, s).plant(tier, U(v), { gasLimit: L1_GAS.plant }));
-  };
-  // A quiet L1 only makes blocks when there are txs, so "latest" can be minutes old and gas estimation
-  // would simulate harvest/water against a stale timestamp and fail. Fixed gas limits skip that.
-  const L1_GAS = { plant: 600_000, harvest: 500_000, uproot: 500_000, water: 150_000, small: 150_000 };
-  const landTx = (label, fn) => run(label, "l1", (s) => fn(new E.Contract(cfg.l1.land, ABI.land, s)));
-  CH.harvest = (id) => landTx(`Thu hoạch cây #${id}`, (c) => c.harvest(id, { gasLimit: L1_GAS.harvest }));
-  CH.uproot = (id) => landTx(`Nhổ sớm cây #${id}`, (c) => c.uproot(id, { gasLimit: L1_GAS.uproot }));
-  const vaultTx = (label, fn) => run(label, "cchain", (s) => fn(new E.Contract(cfg.cchain.vault, ABI.vault, s)));
-  CH.claimLock = (id) => vaultTx(`Rút cây #${id} trực tiếp trên Fuji`, (c) => c.claimLock(id));
-  CH.exitLock = (id) => vaultTx(`Rút gốc cây #${id} trên Fuji`, (c) => c.exitLock(id));
-  CH.water = (id) => landTx(`Tưới cây #${id}`, (c) => c.water(id, { gasLimit: L1_GAS.water }));
-  CH.collect = () => landTx("Gom điểm mùa", (c) => c.collect({ gasLimit: L1_GAS.small }));
-  CH.steal = (addr) => landTx("Hái trộm vườn hàng xóm", (c) => c.steal(E.getAddress(addr), { gasLimit: L1_GAS.small }));
-  CH.setGuard = (b) => landTx(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", (c) => c.setGuard(b, { gasLimit: L1_GAS.small }));
-  CH.explorerTx = (net, hash) => (cfg[net].explorer ? `${cfg[net].explorer.replace(/\/$/, "")}/tx/${hash}` : "");
+  // ---------- sending ----------
+  let queue = Promise.resolve();
+  function run(label, target, iface, fn, args, gas) {
+    const job = queue.then(() => exec(label, target, iface, fn, args, gas));
+    queue = job.catch(() => {});
+    return job;
+  }
+
+  async function relayed(target, data, gas) {
+    const from = CH.account;
+    const nonce = await fwdR.nonces(from);
+    const deadline = Math.floor(Date.now() / 1000) + 600;
+    const req = { from, to: target, value: 0n, gas: BigInt(gas), nonce, deadline, data };
+    if (CH.walletKind === "metamask") await switchToFuji();
+    const signature = await signer.signTypedData(domain, TYPES, req);
+    const body = { request: { from, to: target, value: "0", gas: String(gas), deadline, data, signature } };
+    const r = await fetch(relayUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(j.error || `Fee manager trả lỗi ${r.status}`);
+      err.relayStatus = r.status;
+      throw err;
+    }
+    return j.hash;
+  }
+
+  async function exec(label, target, iface, fn, args, gas) {
+    CH.busy = label;
+    emit();
+    try {
+      const data = iface.encodeFunctionData(fn, args);
+      let hash;
+      try {
+        hash = await relayed(target, data, gas);
+        CH.lastPath = "gasless";
+      } catch (e) {
+        // Fee manager not configured yet: MetaMask users can still pay their own gas.
+        if (e.relayStatus === 503 && CH.walletKind === "metamask") {
+          await switchToFuji();
+          const tx = await signer.sendTransaction({ to: target, data, gasLimit: gas });
+          hash = tx.hash;
+          CH.lastPath = "self-paid";
+        } else throw e;
+      }
+      CH.lastTx = { hash, label };
+      emit();
+      const rc = await rp.waitForTransaction(hash, 1, 120_000);
+      if (!rc || rc.status !== 1) throw new Error("Giao dịch thất bại trên chain: " + hash);
+      return rc;
+    } finally {
+      CH.busy = null;
+      emit();
+      setTimeout(() => CH.refresh().catch(() => {}), 0);
+    }
+  }
+
+  async function ensureAllowance(amount) {
+    const have = await usdcR.allowance(CH.account, c.game);
+    if (have >= amount) return;
+    await run("Cho phép FarmGame dùng USDC", c.usdc, usdcI, "approve", [c.game, E.MaxUint256], GAS.usdc);
+  }
+
+  CH.faucet = () => run("Nhận 1.000 USDC test", c.usdc, usdcI, "faucet", [], GAS.usdc);
+  CH.lendDeposit = async (v) => { await ensureAllowance(U(v)); return run("Gieo hạt vào ruộng rau", c.game, gameI, "deposit", [U(v)], GAS.lend); };
+  CH.lendClaim = () => run("Thu lãi ruộng rau", c.game, gameI, "claim", [], GAS.lend);
+  CH.lendWithdraw = (v) => run("Rút khỏi ruộng rau", c.game, gameI, "withdraw", [U(v)], GAS.lend);
+  CH.plant = async (tier, v) => { await ensureAllowance(U(v)); return run("Trồng cây", c.game, gameI, "plant", [tier, U(v)], GAS.plant); };
+  CH.harvest = (id) => run(`Thu hoạch cây #${id}`, c.game, gameI, "harvest", [id], GAS.harvest);
+  CH.uproot = (id) => run(`Nhổ sớm cây #${id}`, c.game, gameI, "uproot", [id], GAS.uproot);
+  CH.water = (id) => run(`Tưới cây #${id}`, c.game, gameI, "water", [id], GAS.water);
+  CH.collect = () => run("Gom điểm mùa", c.game, gameI, "collect", [], GAS.small);
+  CH.steal = (addr) => run("Hái trộm vườn hàng xóm", c.game, gameI, "steal", [E.getAddress(addr)], GAS.small);
+  CH.setGuard = (b) => run(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", c.game, gameI, "setGuard", [b], GAS.small);
+  CH.explorerTx = (hash) => (c.explorer ? `${c.explorer.replace(/\/$/, "")}/tx/${hash}` : "");
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
-    if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối giao dịch trong ví.";
-    return m.length > 160 ? m.slice(0, 160) + "…" : m;
+    if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối trong ví.";
+    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test." };
+    for (const [k, v] of Object.entries(map)) if (m.includes(k)) return v;
+    return m.length > 180 ? m.slice(0, 180) + "…" : m;
   };
+  CH.checkRelay();
 })();

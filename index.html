@@ -198,15 +198,15 @@ const hsh=(x,y,s=0)=>{let h=(x*374761393+y*668265263+s*982451653)|0;h=Math.imul(
 
 /* ---------- zones ---------- */
 const ZONES=[
-  {id:'home',   name:'Nhà mình',        tag:'Tổng quan nông trại',    ax:36.5,ay:22.6, sx:39.6,sy:22.4, area:[34,18,39,23], chains:[['Game L1','']]},
-  {id:'lend',   name:'Ruộng rau',       tag:'Cho vay stablecoin',     ax:7,   ay:11.4, sx:7,   sy:10.5, area:[2,2,12,11],  chains:[['Game L1',''],['C-Chain','c']]},
-  {id:'orchard',name:'Vườn cây',        tag:'Staking có khóa',        ax:30,  ay:12.2, sx:30,  sy:11.3, area:[25,2,36,12], chains:[['Game L1',''],['C-Chain','c']]},
-  {id:'pond',   name:'Ao cá',           tag:'Cung cấp thanh khoản LP',ax:7.5, ay:16.5, sx:4.4, sy:16.4, area:[1,16,13,28], chains:[['Game L1',''],['C-Chain','c']]},
+  {id:'home',   name:'Nhà mình',        tag:'Tổng quan nông trại',    ax:36.5,ay:22.6, sx:39.6,sy:22.4, area:[34,18,39,23], chains:[['C-Chain','c']]},
+  {id:'lend',   name:'Ruộng rau',       tag:'Cho vay stablecoin',     ax:7,   ay:11.4, sx:7,   sy:10.5, area:[2,2,12,11],  chains:[['C-Chain','c'],['Fee manager','x']]},
+  {id:'orchard',name:'Vườn cây',        tag:'Staking có khóa',        ax:30,  ay:12.2, sx:30,  sy:11.3, area:[25,2,36,12], chains:[['C-Chain','c'],['Fee manager','x']]},
+  {id:'pond',   name:'Ao cá',           tag:'Cung cấp thanh khoản LP',ax:7.5, ay:16.5, sx:4.4, sy:16.4, area:[1,16,13,28], chains:[['C-Chain','c'],['Fee manager','x']]},
   {id:'market', name:'Chợ phiên',       tag:'AMM đổi token',          ax:16.5,ay:16.6, sx:16.5,sy:16.3, area:[13,16,20,26], chains:[['C-Chain','c']]},
   {id:'coop',   name:'Hợp tác xã',      tag:'Vay thế chấp',           ax:28.5,ay:24.6, sx:31.4,sy:24.5, area:[24,19,32,25], chains:[['C-Chain','c']]},
-  {id:'butler', name:'Nhà quản gia AI', tag:'Agent có guardrail',     ax:17,  ay:8.7,  sx:19.6,sy:8.9,  area:[14,3,20,9],   chains:[['Game L1',''],['C-Chain','c'],['x402','x']]},
-  {id:'neighbor',name:'Vườn bác Tư',    tag:'Hái trộm điểm thưởng',   ax:41.5,ay:13.3, sx:43.6,sy:13.2, area:[37,1,46,14], chains:[['Game L1','']]},
-  {id:'gate',   name:'Cổng làng ICM',   tag:'Thư giữa L1 và C-Chain', ax:22,  ay:2.6,  sx:null,sy:null, area:[20,0,24,3],   chains:[['ICM / Teleporter','x']]},
+  {id:'butler', name:'Nhà quản gia AI', tag:'Agent có guardrail',     ax:17,  ay:8.7,  sx:19.6,sy:8.9,  area:[14,3,20,9],   chains:[['C-Chain','c'],['Fee manager','x'],['x402','x']]},
+  {id:'neighbor',name:'Vườn bác Tư',    tag:'Hái trộm điểm thưởng',   ax:41.5,ay:13.3, sx:43.6,sy:13.2, area:[37,1,46,14], chains:[['C-Chain','c']]},
+  {id:'gate',   name:'Cổng làng',       tag:'Fee manager trả gas hộ', ax:22,  ay:2.6,  sx:null,sy:null, area:[20,0,24,3],   chains:[['Fee manager','x'],['ERC-2771','x']]},
 ];
 const Z=Object.fromEntries(ZONES.map(z=>[z.id,z]));
 const BEDS=[];for(const y of [3.4,5.8,8.2])for(const x of [3,5,7,9,11])BEDS.push([x,y]);
@@ -252,7 +252,7 @@ function icm(zone,route,text){
   st.log.push({day:st.day,route,text});if(st.log.length>40)st.log.shift();
   const z=Z[zone]||Z.home, g=Z.gate;
   if(route.startsWith('C'))letters.push({x0:22,y0:0.9,x1:z.ax,y1:z.ay-0.6,t:0});
-  else if(route.startsWith('L1'))letters.push({x0:z.ax,y0:z.ay-0.6,x1:22,y1:0.9,t:0});
+  else if(/^(L1|Ký)/.test(route))letters.push({x0:z.ax,y0:z.ay-0.6,x1:22,y1:0.9,t:0});
   renderLog();
 }
 function blog(cls,text){st.butler.log.push({cls,text});if(st.butler.log.length>60)st.butler.log.shift()}
@@ -272,7 +272,7 @@ function sim(dd){
   if(st.day-lastSample>=0.05){st.hist.push({d:st.day,p:st.price});lastSample=st.day;while(st.hist.length&&st.hist[0].d<st.day-3)st.hist.shift()}
   const p1=priceAgo(1), vol=Math.abs(st.price-p1)/p1;
   const wx=vol>.09?'bão':vol>.04?'mưa':'nắng';
-  if(wx!==st.weather){st.weather=wx;if(wx==='bão'&&st.day-st.lastStormLog>1){st.lastStormLog=st.day;icm('pond','C → L1',`Oracle: AVAX biến động ${nf(vol*100,1)}%/ngày, thời tiết chuyển sang bão`)}}
+  if(wx!==st.weather){st.weather=wx;if(wx==='bão'&&st.day-st.lastStormLog>1){st.lastStormLog=st.day;icm('pond','C-Chain',`Oracle: AVAX biến động ${nf(vol*100,1)}%/ngày, thời tiết chuyển sang bão`)}}
   // yields
   if(!CH.live)st.lend.acc+=st.lend.p*.04/365*dd;
   if(st.lp)st.lp.fees+=lpVal()*.18/365*dd;
@@ -291,7 +291,7 @@ function sim(dd){
       if(frac>.999)st.lp=null;
       blog('dim',`[ngày ${nf(st.day,1)}] Bão ở ao cá. Đề xuất: chuyển ${usd(amt)} sang ruộng rau.`);
       blog('ok',`PolicyModule.check ✓ ao cá → ruộng rau, trong hạn mức (${nf(b.spent,0)}/${b.cap})`);
-      icm('pond','L1 → C-Chain',`Quản gia chuyển vụ: rút ${usd(amt)} khỏi LP, gửi vào LendingVault`);
+      icm('pond','Ký → Fee manager',`Quản gia chuyển vụ: rút ${usd(amt)} khỏi LP, gửi vào FarmGame`);
       floater(butler.x,butler.y-1.4,'Chuyển vụ!','#86d36f');
     }else if(!b.warned){
       b.warned=true;
@@ -312,7 +312,7 @@ function newDay(){
       if(b.spent+v>b.cap){blog('warn',`Quả ${TIERS[l.days].name} đã chín nhưng vượt hạn mức ngày, để mai thu.`);continue}
       b.spent+=v;st.locks=st.locks.filter(x=>x!==l);st.lend.p+=v;
       blog('ok',`PolicyModule.check ✓ thu hoạch ${TIERS[l.days].name}, ${usd(v)} về ruộng rau`);
-      icm('orchard','L1 → C-Chain',`Quản gia thu hoạch ${TIERS[l.days].name}: unlock ${usd(v)}`);
+      icm('orchard','Ký → Fee manager',`Quản gia thu hoạch ${TIERS[l.days].name}: unlock ${usd(v)}`);
     }
   }
   if(!b.hired&&st.points>10&&Math.random()<.15){
@@ -334,14 +334,14 @@ function amt(id){const el=$('#'+id);const v=Number(String(el?.value||'').replace
 function pay(v){if(v>st.usdc+1e-9){toast('Ví chỉ còn '+usd(st.usdc)+'.');return false}st.usdc-=v;return true}
 function canRemove(avax){if(st.debt<=0)return true;const ok=(st.coll-avax)*st.price*0.8/st.debt>=1.05;if(!ok)toast('Đang nợ HTX. Rút chừng này AVAX sẽ làm hệ số an toàn dưới 1,05, hãy trả bớt nợ trước.');return ok}
 const ACT={
-  'lend-dep'(){const v=amt('amt-lend');if(!v||!pay(v))return;st.lend.p+=v;floatZ('lend','+'+nf(v,0)+' gieo hạt');icm('lend','L1 → C-Chain',`Gieo hạt: deposit(${usd(v)}) vào LendingVault`)},
-  'lend-claim'(){const v=st.lend.acc;if(v<0.001)return toast('Chưa có lãi để thu.');st.lend.acc=0;st.usdc+=v;floatZ('lend','+'+nf(v,3)+' USDC','#86d36f');icm('lend','C → L1',`Thu hoạch lãi ${usd(v,3)} từ LendingVault`)},
-  'lend-out'(){const v=st.lend.p+st.lend.acc;if(v<0.001)return toast('Ruộng đang trống.');st.usdc+=v;st.lend={p:0,acc:0};floatZ('lend','Rút '+nf(v,0));icm('lend','L1 → C-Chain',`Rút toàn bộ ${usd(v)} khỏi LendingVault`)},
-  'orch-plant'(arg){const v=amt('amt-orchard');if(!v)return;const d=Number(arg);if(st.locks.length>=SPOTS.length)return toast('Vườn đã kín chỗ, hãy thu hoạch bớt.');if(!pay(v))return;st.locks.push({id:st.nextId++,amt:v,days:d,apy:TIERS[d].apy,start:st.day});floatZ('orchard','Trồng '+TIERS[d].name);icm('orchard','L1 → C-Chain',`Trồng ${TIERS[d].name}: lock(${usd(v)}, ${d} ngày) vào StakingVault`)},
-  'orch-harvest'(arg){const l=st.locks.find(x=>x.id==arg);if(!l||!ripe(l))return;const v=l.amt+lockAcc(l);st.locks=st.locks.filter(x=>x!==l);st.usdc+=v;floatZ('orchard','+'+nf(v,2),'#86d36f');icm('orchard','C → L1',`Thu hoạch ${TIERS[l.days].name}: unlock ${usd(v)} (gốc + lãi)`)},
-  'orch-pull'(arg){const l=st.locks.find(x=>x.id==arg);if(!l)return;st.locks=st.locks.filter(x=>x!==l);st.usdc+=l.amt;floatZ('orchard','Nhổ sớm, mất lãi','#ff9a86');icm('orchard','L1 → C-Chain',`Nhổ sớm ${TIERS[l.days].name}: rút ${usd(l.amt)}, bỏ phần lãi`)},
-  'pond-add'(){const v=amt('amt-pond');if(!v||!pay(v))return;st.lp=st.lp?{V0:lpVal()+v,p0:st.price,fees:st.lp.fees}:{V0:v,p0:st.price,fees:0};floatZ('pond','Thả cá +'+nf(v,0));icm('pond','L1 → C-Chain',`Thả cá: addLiquidity(${usd(v)}) vào pool USDC/AVAX`)},
-  'pond-out'(){if(!st.lp)return toast('Ao đang trống.');const v=lpVal()+st.lp.fees;st.lp=null;st.usdc+=v;floatZ('pond','Vớt cá '+nf(v,0),'#86d36f');icm('pond','C → L1',`Vớt cá: removeLiquidity, nhận ${usd(v)}`)},
+  'lend-dep'(){const v=amt('amt-lend');if(!v||!pay(v))return;st.lend.p+=v;floatZ('lend','+'+nf(v,0)+' gieo hạt');icm('lend','Ký → Fee manager',`Gieo hạt: deposit(${usd(v)}) vào FarmGame`)},
+  'lend-claim'(){const v=st.lend.acc;if(v<0.001)return toast('Chưa có lãi để thu.');st.lend.acc=0;st.usdc+=v;floatZ('lend','+'+nf(v,3)+' USDC','#86d36f');icm('lend','C-Chain',`Thu hoạch lãi ${usd(v,3)} từ FarmGame`)},
+  'lend-out'(){const v=st.lend.p+st.lend.acc;if(v<0.001)return toast('Ruộng đang trống.');st.usdc+=v;st.lend={p:0,acc:0};floatZ('lend','Rút '+nf(v,0));icm('lend','Ký → Fee manager',`Rút toàn bộ ${usd(v)} khỏi FarmGame`)},
+  'orch-plant'(arg){const v=amt('amt-orchard');if(!v)return;const d=Number(arg);if(st.locks.length>=SPOTS.length)return toast('Vườn đã kín chỗ, hãy thu hoạch bớt.');if(!pay(v))return;st.locks.push({id:st.nextId++,amt:v,days:d,apy:TIERS[d].apy,start:st.day});floatZ('orchard','Trồng '+TIERS[d].name);icm('orchard','Ký → Fee manager',`Trồng ${TIERS[d].name}: lock(${usd(v)}, ${d} ngày) vào FarmGame`)},
+  'orch-harvest'(arg){const l=st.locks.find(x=>x.id==arg);if(!l||!ripe(l))return;const v=l.amt+lockAcc(l);st.locks=st.locks.filter(x=>x!==l);st.usdc+=v;floatZ('orchard','+'+nf(v,2),'#86d36f');icm('orchard','C-Chain',`Thu hoạch ${TIERS[l.days].name}: unlock ${usd(v)} (gốc + lãi)`)},
+  'orch-pull'(arg){const l=st.locks.find(x=>x.id==arg);if(!l)return;st.locks=st.locks.filter(x=>x!==l);st.usdc+=l.amt;floatZ('orchard','Nhổ sớm, mất lãi','#ff9a86');icm('orchard','Ký → Fee manager',`Nhổ sớm ${TIERS[l.days].name}: rút ${usd(l.amt)}, bỏ phần lãi`)},
+  'pond-add'(){const v=amt('amt-pond');if(!v||!pay(v))return;st.lp=st.lp?{V0:lpVal()+v,p0:st.price,fees:st.lp.fees}:{V0:v,p0:st.price,fees:0};floatZ('pond','Thả cá +'+nf(v,0));icm('pond','Ký → Fee manager',`Thả cá: addLiquidity(${usd(v)}) vào pool USDC/AVAX`)},
+  'pond-out'(){if(!st.lp)return toast('Ao đang trống.');const v=lpVal()+st.lp.fees;st.lp=null;st.usdc+=v;floatZ('pond','Vớt cá '+nf(v,0),'#86d36f');icm('pond','C-Chain',`Vớt cá: removeLiquidity, nhận ${usd(v)}`)},
   'coop-borrow'(){const v=amt('amt-coop');if(!v)return;if(v>maxBorrow()+1e-9)return toast('Chỉ vay thêm được tối đa '+usd(maxBorrow())+'.');st.debt+=v;st.usdc+=v;floatZ('coop','Vay '+nf(v,0)+' phân bón');icm('coop','C-Chain',`Vay phân bón: borrow(${usd(v)}) thế chấp bằng nông sản`)},
   'coll-dep'(){const v=amt('amt-coll');if(!v)return;if(v>st.avax+1e-9)return toast('Ví chỉ có '+nf(st.avax,3)+' AVAX.');st.avax-=v;st.coll+=v;floatZ('coop','Gửi '+nf(v,2)+' AVAX vào kho');icm('coop','C-Chain',`Gửi ${nf(v,3)} AVAX vào kho thóc HTX làm thế chấp`)},
   'coll-out'(){let v=amt('amt-coll');if(!v)return;v=Math.min(v,st.coll);if(v<=0)return toast('Kho đang trống.');if(!canRemove(v))return;st.coll-=v;st.avax+=v;floatZ('coop','Rút '+nf(v,2)+' AVAX');icm('coop','C-Chain',`Rút ${nf(v,3)} AVAX khỏi kho thóc HTX`)},
@@ -372,9 +372,9 @@ const ACT={
     blog('dim',`Quản gia (LLM) soạn giao dịch: transfer(0xBAD…F00D, ${usd(all,0)})`);
     blog('bad','PolicyModule.check ✗ REVERT DESTINATION_NOT_WHITELISTED');
     blog('bad',`PolicyModule.check ✗ REVERT DAILY_CAP_EXCEEDED (${nf(all,0)} > ${nf(b.cap-b.spent,0)} còn lại)`);
-    blog('ok',`Không mất đồng nào. Vụ việc được ghi lên Game L1, hash ${hex()}`);
+    blog('ok',`Không mất đồng nào. Vụ việc được ghi lên C-Chain, hash ${hex()}`);
     floater(butler.x,butler.y-1.4,'REVERT','#ff9a86');
-    icm('butler','L1','Ghi nhận vi phạm policy: prompt injection bị chặn');
+    icm('butler','C-Chain','Ghi nhận vi phạm policy: prompt injection bị chặn');
   },
   'market-swap'(){
     const v=amt('amt-market');if(!v)return;const dir=$('#mk-dir').value;const q=quote(dir,v);
@@ -387,7 +387,7 @@ const ACT={
     if(n.ripe<3)return toast('Vườn bác Tư chưa có gì chín.');
     const g=Math.round(n.ripe*.4);n.ripe-=g;st.points+=g;n.cool=1;
     floater(41.5,12,'+'+g+' điểm mùa','#f2c14e');floater(42.5,8.4,'Ê! Ai đó?','#f3ecd9');
-    icm('neighbor','Game L1',`Hái trộm ${g} điểm mùa ở vườn bác Tư (chỉ điểm thưởng, không đụng tiền gốc)`);
+    icm('neighbor','C-Chain',`Hái trộm ${g} điểm mùa ở vườn bác Tư (chỉ điểm thưởng, không đụng tiền gốc)`);
   },
   'design'(){openZone('design')},
 };
@@ -415,7 +415,7 @@ const PANELS={
       <ol class="steps">
         <li>Đi bằng <b>WASD / phím mũi tên</b>, hoặc <b>chạm vào khu vực</b> trên bản đồ để nhân vật tự đi tới.</li>
         <li>Đứng cạnh biển gỗ rồi bấm <b>E</b> (hoặc nút vàng ở dưới) để mở bảng.</li>
-        <li>Mỗi khu là một cơ chế DeFi thật. Mỗi thao tác gửi một lá thư ICM bay qua <b>Cổng làng</b>.</li>
+        <li>Mỗi khu là một cơ chế DeFi thật. Mỗi thao tác chỉ cần <b>ký</b>: lá thư bay tới <b>Cổng làng</b>, nơi fee manager gửi giao dịch và trả gas hộ.</li>
         <li>Yield chạy theo APY thật nên tăng chậm. Dùng <b>7×</b> để tua nhanh, <b>Gây bão</b> để xem rủi ro.</li>
       </ol>
       <p class="note">Đây là bản mô phỏng: số dư, giá AVAX và các giao dịch đều chạy trong trình duyệt, chưa nối chain thật.</p>
@@ -478,77 +478,91 @@ const PANELS={
     actions:()=>`<p class="note">Kiểu "trộm rau" quen thuộc của game nông trại. Chỉ hái được <b>điểm thưởng</b> chưa thu, <b>không bao giờ đụng tiền gốc</b> của ai. Điểm mùa dùng để chia quỹ tài trợ cuối vụ. Nhà nào thuê quản gia thì có người giữ vườn.</p>`
   },
   gate:{
-    stats:()=>`<p class="note">Game L1 giữ trạng thái game (luống, cây, điểm, XP), gas gần như bằng 0. Tiền thật nằm ở C-Chain. Mỗi thao tác là một thông điệp <b>ICM (Teleporter)</b> đi qua cổng làng.</p>`+
-      `<div class="list">${st.log.slice(-14).reverse().map(l=>`<div class="item" style="grid-template-columns:1fr"><small>Ngày ${nf(l.day,1)} · ${chainChip(l.route)}</small><span style="font-size:13px">${esc(l.text)}</span></div>`).join('')||'<p class="note">Chưa có thư nào.</p>'}</div>`,
+    stats:()=>`<p class="note">Người chơi chỉ <b>ký</b> một yêu cầu EIP-712. Fee manager ở cổng làng kiểm tra chữ ký, chỉ chuyển tiếp lệnh tới contract của game, rồi gửi giao dịch qua <b>FarmForwarder</b> (ERC-2771) và <b>trả gas hộ</b>. Contract vẫn biết chính xác ai là người chơi.</p>`+
+      (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']]):'')+
+      `<div class="list">${st.log.slice(-14).reverse().map(l=>`<div class="item" style="grid-template-columns:1fr"><small>Ngày ${nf(l.day%365,1)} · ${chainChip(l.route)}</small><span style="font-size:13px">${esc(l.text)}</span></div>`).join('')||'<p class="note">Chưa có giao dịch nào.</p>'}</div>`,
     actions:()=>''
   },
   design:{
-    title:'Bản thiết kế',tag:'Kiến trúc cho UniHack',chains:[['Game L1',''],['C-Chain','c'],['ICM','x'],['x402','x']],
+    title:'Bản thiết kế',tag:'Kiến trúc cho UniHack',chains:[['C-Chain','c'],['Fee manager','x'],['x402','x']],
     stats:()=>'',
-    actions:()=>`<p class="note">Mỗi công trình là một primitive DeFi. Game state chạy trên <b>Game L1</b>, tiền thật ở <b>C-Chain</b>, hai bên nói chuyện qua <b>ICM</b>.</p>
-      <div class="tbl"><table><thead><tr><th>Khu</th><th>Cơ chế</th><th>Contract</th><th>Chain</th></tr></thead><tbody>
-      <tr><td>Ruộng rau</td><td>Cho vay stablecoin</td><td>LendingVault</td><td>C-Chain</td></tr>
-      <tr><td>Vườn cây</td><td>Staking khóa 7/30/90 ngày</td><td>TierVault</td><td>C-Chain</td></tr>
-      <tr><td>Ao cá</td><td>LP USDC/AVAX, thời tiết từ oracle</td><td>PondLP + WeatherOracle</td><td>C-Chain → L1</td></tr>
-      <tr><td>Hợp tác xã</td><td>Thế chấp AVAX, vay USDC, thanh lý</td><td>CoopLending</td><td>C-Chain</td></tr>
-      <tr><td>Chợ phiên</td><td>AMM x·y=k</td><td>DEX có sẵn trên Fuji</td><td>C-Chain</td></tr>
-      <tr><td>Quản gia AI</td><td>Session key + guardrail, tư vấn x402</td><td>SmartAccount + PolicyModule</td><td>C-Chain</td></tr>
-      <tr><td>Luống, cây, điểm, XP</td><td>Trạng thái game</td><td>Farm, Plot, Points</td><td>Game L1</td></tr>
-      <tr><td>Cổng làng</td><td>Nhắn tin xuyên chain</td><td>ICM sender / receiver</td><td>L1 ↔ C-Chain</td></tr>
+    actions:()=>`<p class="note">Mỗi công trình là một primitive DeFi. Toàn bộ chạy trên <b>Avalanche Fuji C-Chain</b>. Người chơi đăng nhập bằng ví trong game hoặc MetaMask, chỉ ký, <b>fee manager trả gas hộ</b> qua ERC-2771.</p>
+      <div class="tbl"><table><thead><tr><th>Khu</th><th>Cơ chế</th><th>Contract</th><th>Trạng thái</th></tr></thead><tbody>
+      <tr><td>Ruộng rau</td><td>Cho vay stablecoin 4%/năm</td><td>FarmGame</td><td>On-chain</td></tr>
+      <tr><td>Vườn cây</td><td>Khóa 7/30/90 ngày, 6/9/14%</td><td>FarmGame</td><td>On-chain</td></tr>
+      <tr><td>Vườn bác Tư</td><td>Tưới, chuỗi ngày, trộm điểm</td><td>FarmGame</td><td>On-chain</td></tr>
+      <tr><td>Cổng làng</td><td>Fee manager trả gas hộ</td><td>FarmForwarder + /api/relay</td><td>On-chain</td></tr>
+      <tr><td>Quản gia AI</td><td>Session key, hạn mức, kill switch</td><td>ButlerAccount</td><td>On-chain (script)</td></tr>
+      <tr><td>Ao cá</td><td>LP, thời tiết từ oracle</td><td>—</td><td>Mô phỏng</td></tr>
+      <tr><td>Hợp tác xã</td><td>Thế chấp AVAX, thanh lý</td><td>—</td><td>Mô phỏng</td></tr>
+      <tr><td>Chợ phiên</td><td>AMM x·y=k</td><td>—</td><td>Mô phỏng</td></tr>
       </tbody></table></div>
       <p class="label">Ba vòng chơi</p>
-      <ol class="steps"><li><b>Hằng ngày:</b> ghé vườn, thu lãi, hái trộm vườn hàng xóm. Thao tác dày nên chạy trên L1 gần như miễn phí gas.</li>
-      <li><b>Hằng tuần:</b> thu hoạch cây ớt, chọn chiến lược theo thời tiết, đổi ở chợ.</li>
+      <ol class="steps"><li><b>Hằng ngày:</b> tưới cây, gom điểm, hái trộm vườn hàng xóm. Thao tác dày nhưng người chơi không trả gas.</li>
+      <li><b>Hằng tuần:</b> thu hoạch cây ớt, chọn chiến lược theo thời tiết.</li>
       <li><b>Dài hạn:</b> sầu riêng 90 ngày, đòn bẩy ở HTX, giữ hạng điểm mùa để chia quỹ tài trợ.</li></ol>
       <p class="label">Ba câu pitch phải trả lời</p>
-      <ol class="steps"><li><b>Why on-chain:</b> tiền nằm trong vault người chơi tự giữ. Quản gia AI bị giới hạn bằng contract, không phải bằng lời hứa.</li>
-      <li><b>Why Avalanche:</b> game state trên L1 riêng (gas ≈ 0), tiền thật ở C-Chain, ICM nối hai bên.</li>
-      <li><b>Tiền từ đâu:</b> yield thật từ protocol (Aave/Benqi trên Fuji), phí LP và quỹ tài trợ mùa vụ. Không có token game, không random drop.</li></ol>`
+      <ol class="steps"><li><b>Why on-chain:</b> tiền nằm trong contract người chơi kiểm soát bằng chữ ký. Quản gia AI bị giới hạn bằng contract, không phải bằng lời hứa.</li>
+      <li><b>Why Avalanche:</b> C-Chain finality dưới 2 giây và phí rất thấp, nên fee manager trả gas cho mọi thao tác nhỏ được. Lên mobile hay đổi sang ví nhúng như Privy không phải đổi contract.</li>
+      <li><b>Tiền từ đâu:</b> yield từ protocol (Aave/Benqi), phí LP và quỹ tài trợ mùa vụ. Không có token game, không random drop.</li></ol>`
   }
 };
-const chainChip=r=>`<span class="chain ${r.includes('C')&&!r.includes('L1')?'c':r.includes('→')?'x':''}">${esc(r)}</span>`;
+const chainChip=r=>`<span class="chain ${/C-Chain/.test(r)?'c':/Ký|Fee/.test(r)?'x':''}">${esc(r)}</span>`;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-/* ---------- on-chain mode ---------- */
+/* ---------- on-chain mode (Fuji C-Chain, gasless via fee manager) ---------- */
 const short=h=>h?h.slice(0,6)+'…'+h.slice(-4):'';
-const busyLine=()=>CH.busy?`<p class="note warn">Đang chờ: ${esc(CH.busy)}. Xác nhận trong ví…</p>`:'';
+const busyLine=()=>CH.busy?`<p class="note warn">Đang xử lý: ${esc(CH.busy)}…</p>`:'';
 const liveTag='<span class="pill g">On-chain</span>';
+const gasTag=()=>CH.gasless?'<span class="pill g">Miễn phí gas</span>':CH.walletKind==='metamask'?'<span class="pill y">Bạn tự trả gas</span>':'<span class="pill r">Fee manager chưa bật</span>';
+const sig=()=>CH.walletKind==='game'?'Ví trong game tự ký':'Ký trong MetaMask';
+Object.assign(PANELS,{
+  wallet:{
+    title:'Ví của bạn',tag:'Đăng nhập không cần cài gì',chains:[['C-Chain','c'],['Fee manager','x']],
+    stats:()=>{
+      if(!CH.available)return `<p class="note bad">${esc(CH.reason)}</p>`;
+      if(!CH.live)return `<p class="note">Chọn cách vào nông trại. Mọi thao tác chỉ cần <b>ký</b>, phí gas do <b>fee manager</b> của game trả hộ.</p>
+        <div class="list">
+          <button class="tier" data-act="w-game"><b>Ví trong game</b><small>${CH.hasSavedGameWallet()?'Mở lại ví đã tạo trên trình duyệt này':'Tạo ví mới ngay, không cần cài gì'}</small><em>Khuyên dùng</em></button>
+          <button class="tier" data-act="w-mm"><b>MetaMask / Core</b><small>${CH.hasMetaMask?'Dùng ví trình duyệt của bạn':'Không thấy ví trình duyệt'}</small></button>
+        </div>`;
+      return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',CH.walletKind==='game'?'Ví trong game':'MetaMask / Core'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]])+
+        `<div class="row"><button class="btn" data-act="w-copy">Sao chép địa chỉ</button>${CH.walletKind==='game'?'<button class="btn" data-act="w-export">Sao lưu khóa ví</button>':''}<button class="btn danger" data-act="w-out">Thoát ví</button></div>`+
+        (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastPath==='gasless'?' · fee manager trả gas':''}</p>`:'');
+    },
+    actions:()=>`<p class="note">Ví trong game giữ khóa ngay trên trình duyệt này, <b>chỉ dùng cho testnet</b>. Đổi máy hay xoá dữ liệu trình duyệt thì ví mất, hãy bấm <b>Sao lưu khóa ví</b> nếu muốn giữ.</p><pre class="term" id="w-key" hidden></pre>`
+  }
+});
 const LIVE={
   home:{
     stats:()=>{const d=CH.data;if(!d)return '<p class="note">Đang đọc dữ liệu từ chain…</p>';
-      return kv([['Ví',short(CH.account)],['USDC trên Fuji',usd(d.usdc)],['AVAX trên Fuji',nf(d.avax,3)],...(CH.hasL1?[['Gas trên '+esc(CH.cfg.l1.name),nf(d.l1gas,3)+' '+esc(CH.cfg.l1.currency)]]:[['Game L1','Chưa nối']]),
-        ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing').length+' cây đang trồng'],['Điểm mùa (L1)',nf(d.farmer.points,0)]])+
-        (CH.hasL1?'':'<p class="note warn">Mới deploy Fuji: Ruộng rau đã on-chain. Vườn cây và Vườn hàng xóm cần Game L1 (deploy.html, bước 3–4).</p>')+`<p class="note">${liveTag} Ruộng rau, Vườn cây và Vườn hàng xóm dùng contract thật trên Fuji và ${esc(CH.hasL1?CH.cfg.l1.name:'Game L1')}. Ao cá, Chợ phiên, Hợp tác xã và Quản gia vẫn chạy mô phỏng. 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
+      return kv([['Ví',short(CH.account)],['USDC',usd(d.usdc)],['Phí gas',gasTag()],
+        ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing').length+' cây đang trồng'],['Điểm mùa',nf(d.farmer.points,0)]])+
+        `<p class="note">${liveTag} Ruộng rau, Vườn cây và Vườn hàng xóm dùng contract thật trên ${esc(CH.cfg.cchain.name)}. Ao cá, Chợ phiên, Hợp tác xã và Quản gia vẫn chạy mô phỏng. 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
     actions:()=>PANELS.home.actions()
   },
   lend:{
     stats:()=>{const d=CH.data;if(!d)return '';
-      return kv([['Ví Fuji',usd(d.usdc)],['Tiền gốc',usd(d.lendPrincipal)],['Lãi đang chờ',usd(d.lendPending,4)],['Lãi suất','4,0%/năm'],['Quỹ thưởng còn',usd(d.reserve,0)]])+busyLine()+
-        `<p class="note">${liveTag} Giao dịch thật trên Fuji C-Chain với USDC test. Lần gửi đầu tiên ví sẽ hỏi cho phép FarmVault dùng USDC.</p>`},
+      return kv([['Ví',usd(d.usdc)],['Tiền gốc',usd(d.lendPrincipal)],['Lãi đang chờ',usd(d.lendPending,4)],['Lãi suất','4,0%/năm'],['Quỹ thưởng còn',usd(d.reserve,0)]])+busyLine()+
+        `<p class="note">${liveTag} ${gasTag()} USDC test thật trên Fuji. ${sig()}, fee manager gửi giao dịch hộ.</p>`},
     actions:()=>`${field('amt-lend')}<div class="row"><button class="btn primary" data-act="c-lend-dep">Gieo hạt (gửi)</button><button class="btn" data-act="c-lend-claim">Thu lãi</button><button class="btn" data-act="c-lend-out">Rút hết</button></div><div class="row"><button class="btn" data-act="c-faucet">Nhận 1.000 USDC test</button></div>`
   },
   orchard:{
     stats:()=>{const d=CH.data;if(!d)return '';const now=Date.now()/1000,L=CH.cfg.dayLength;
-      const list=[...d.crops].reverse().filter((c,i)=>c.status==='Growing'||c.lock.open||i<4);
-      const items=list.map(c=>{const t=TIERS[c.days],ready=c.plantedAt+(c.days+2)*L,ripeNow=c.status==='Growing'&&now>=ready,watered=c.lastWateredDay===d.today,k=c.lock;
-        const lockTag=k.open?'<span class="ok">Đã khóa trên C-Chain</span>':k.exists?'<span class="ok">C-Chain đã trả tiền</span>':'<span class="warn">Đang chờ thư ICM sang C-Chain…</span>';
+      const list=[...d.crops].reverse().filter((c,i)=>c.status==='Growing'||i<4);
+      const items=list.map(c=>{const t=TIERS[c.days],ready=c.plantedAt+c.days*L,ripeNow=c.status==='Growing'&&now>=ready,watered=c.lastWateredDay===d.today;
         let line='',btns='',barH='';
-        if(c.status==='Harvested'||c.status==='Uprooted'){
-          const verb=c.status==='Harvested'?'Đã thu hoạch':'Đã nhổ sớm';
-          if(k.open){line=`${verb} · <span class="warn">chờ C-Chain trả tiền qua ICM…</span>`;
-            btns=c.status==='Harvested'?(k.ripe?`<button class="btn" data-act="c-claim" data-arg="${c.id}">Tự rút trên Fuji</button>`:''):`<button class="btn" data-act="c-exit" data-arg="${c.id}">Tự rút gốc trên Fuji</button>`}
-          else if(k.exists)line=`<span class="ok">${verb}, C-Chain đã trả tiền</span>`;
-          else line=`${verb} · <span class="dim">không có tiền khóa trên C-Chain</span>`}
-        else if(c.status==='Failed')line='<span class="bad">Thất bại: ví chưa đủ USDC hoặc chưa cho phép trên Fuji</span>';
-        else{line=(ripeNow?'<span class="ok">Đã chín</span>':`Còn ${nf(Math.max(0,ready-now)/60,1)} phút`)+' · '+lockTag;
+        if(c.status==='Harvested')line=`<span class="ok">Đã thu hoạch: ${usd(c.payout,4)}</span>`;
+        else if(c.status==='Uprooted')line=`Đã nhổ sớm, nhận lại ${usd(c.payout,2)}`;
+        else{line=ripeNow?'<span class="ok">Đã chín</span>':`Còn ${nf(Math.max(0,ready-now)/60,1)} phút`;
           btns=ripeNow?`<button class="btn primary" data-act="c-harvest" data-arg="${c.id}">Thu hoạch</button>`:
             `<div class="row" style="flex-wrap:nowrap"><button class="btn" data-act="c-water" data-arg="${c.id}" ${watered?'disabled':''}>${watered?'Đã tưới':'Tưới'}</button><button class="btn danger" data-act="c-uproot" data-arg="${c.id}">Nhổ</button></div>`;
-          barH=bar(Math.min(1,(now-c.plantedAt)/((c.days+2)*L)),ripeNow?'#f2c14e':'#86d36f')}
+          barH=bar(Math.min(1,(now-c.plantedAt)/(c.days*L)),ripeNow?'#f2c14e':'#86d36f')}
         return `<div class="item"><div><b>#${c.id} ${t.name}</b> <small>· ${usd(c.amount,0)} · ${nf(t.apy*100,0)}%</small><br><small>${line}</small></div>${btns||'<span></span>'}${barH}</div>`}).join('');
-      return busyLine()+`<div class="list">${items||'<p class="note">Chưa có cây nào trên chain. Chọn loại cây bên dưới để trồng.</p>'}</div>`},
+      return busyLine()+`<div class="list">${items||'<p class="note">Chưa có cây nào. Chọn loại cây bên dưới để trồng.</p>'}</div>`},
     actions:()=>`<p class="label">Trồng cây mới</p>${field('amt-orchard','USDC','10')}
       <div class="tiers">${Object.entries(TIERS).map(([d,t])=>`<button class="tier" data-act="c-plant" data-arg="${d}"><b>${t.name}</b><small>${d} ngày game · ${nf(d*CH.cfg.dayLength/60,0)} phút</small><em>${nf(t.apy*100,0)}%/năm</em></button>`).join('')}</div>
-      <p class="note">${liveTag} Trồng cây gồm 2 bước: cho phép FarmVault dùng USDC trên Fuji (chỉ lần đầu), rồi gửi lệnh trồng trên Game L1. Cây mọc ngay trên L1, còn một lá thư ICM mang lệnh sang C-Chain để khóa USDC thật. Trạng thái tiền luôn đọc trực tiếp từ C-Chain. Cây chín sau số ngày game cộng 2 ngày chờ thư ICM.</p>`
+      <p class="note">${liveTag} ${gasTag()} Trồng cây là khóa USDC vào FarmGame trên Fuji, chín thì nhận gốc + lãi. Lần đầu game sẽ xin chữ ký cho phép dùng USDC, cũng miễn phí gas.</p>`
   },
   neighbor:{
     stats:()=>{const d=CH.data;if(!d)return '';const f=d.farmer;
@@ -558,27 +572,34 @@ const LIVE={
       <p class="note">${liveTag} Tưới cây mỗi ngày để có điểm chín. Điểm chín chưa gom có thể bị hàng xóm hái 40%, mỗi người 1 lần/ngày. Chỉ đụng điểm thưởng, không bao giờ đụng tiền.</p>`
   }
 };
-const NEEDS_L1={orchard:1,neighbor:1};
-const panelFor=id=>(CH.live&&CH.data&&LIVE[id]&&(CH.hasL1||!NEEDS_L1[id])&&LIVE[id])||PANELS[id];
-const cAct=(p,ok)=>p.then(()=>{if(ok)toast(ok)}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
+const panelFor=id=>(CH.live&&CH.data&&LIVE[id])||PANELS[id];
+const cAct=(p,ok)=>p.then(r=>{if(ok)toast(ok);return r}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
+const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>icm(zone,'C-Chain',`Đã ghi lên chain · tx ${short(r.hash)}`),400)};
 Object.assign(ACT,{
-  'c-faucet'(){cAct(CH.faucet(),'Đã nhận 1.000 USDC test trên Fuji.')},
-  'c-lend-dep'(){const v=amt('amt-lend');if(!v)return;cAct(CH.lendDeposit(v).then(r=>{icm('lend','C-Chain',`deposit(${usd(v)}) · tx ${short(r.hash)}`);floatZ('lend','+'+nf(v,0)+' gieo hạt')}),'Đã gieo hạt trên Fuji.')},
-  'c-lend-claim'(){cAct(CH.lendClaim().then(r=>icm('lend','C-Chain',`claim() · tx ${short(r.hash)}`)),'Đã thu lãi.')},
-  'c-lend-out'(){const v=CH.data?.lendPrincipal||0;if(!v)return toast('Ruộng đang trống.');cAct(CH.lendWithdraw(v).then(r=>icm('lend','C-Chain',`withdraw(${usd(v)}) · tx ${short(r.hash)}`)),'Đã rút khỏi ruộng rau.')},
+  'w-game'(){connectWith('game')},
+  'w-mm'(){connectWith('metamask')},
+  'w-copy'(){navigator.clipboard?.writeText(CH.account).then(()=>toast('Đã chép địa chỉ ví.')).catch(()=>toast(CH.account))},
+  'w-export'(){const el=$('#w-key');if(!el)return;if(!el.hidden){el.hidden=true;return}el.textContent='Khóa riêng (testnet, đừng gửi cho ai):\n'+CH.exportKey();el.hidden=false},
+  'w-out'(){CH.disconnect();liveInit=false;const w=$('#b-wallet');w.textContent='Kết nối ví';w.classList.add('primary');document.querySelectorAll('[data-speed]').forEach(b=>b.disabled=false);toast('Đã thoát ví. Ví trong game vẫn được giữ trên trình duyệt này.');openZone('wallet')},
+  'c-faucet'(){cAct(CH.faucet().then(sent('lend','faucet() · nhận 1.000 USDC test')),'Đã nhận 1.000 USDC test.')},
+  'c-lend-dep'(){const v=amt('amt-lend');if(!v)return;cAct(CH.lendDeposit(v).then(r=>{sent('lend',`deposit(${usd(v)})`)(r);floatZ('lend','+'+nf(v,0)+' gieo hạt')}),'Đã gieo hạt.')},
+  'c-lend-claim'(){cAct(CH.lendClaim().then(sent('lend','claim()')),'Đã thu lãi.')},
+  'c-lend-out'(){const v=CH.data?.lendPrincipal||0;if(!v)return toast('Ruộng đang trống.');cAct(CH.lendWithdraw(v).then(sent('lend',`withdraw(${usd(v)})`)),'Đã rút khỏi ruộng rau.')},
   'c-plant'(arg){const v=amt('amt-orchard');if(!v)return;const tier={7:0,30:1,90:2}[arg];
-    cAct(CH.plant(tier,v).then(r=>{icm('orchard','L1 → C-Chain',`plant(${TIERS[arg].name}, ${usd(v)}) · thư ICM đã gửi · tx ${short(r.hash)}`);floatZ('orchard','Gieo '+TIERS[arg].name)}),'Đã trồng trên L1. Thư ICM đang mang lệnh khóa USDC sang C-Chain.')},
-  'c-harvest'(id){cAct(CH.harvest(Number(id)).then(r=>icm('orchard','L1 → C-Chain',`harvest(#${id}) · tx ${short(r.hash)}`)),'Đã gửi lệnh thu hoạch qua ICM.')},
-  'c-uproot'(id){cAct(CH.uproot(Number(id)).then(r=>icm('orchard','L1 → C-Chain',`uproot(#${id}) · tx ${short(r.hash)}`)),'Đã gửi lệnh nhổ sớm.')},
-  'c-claim'(id){cAct(CH.claimLock(Number(id)).then(r=>icm('orchard','C-Chain',`claimLock(#${id}) · tx ${short(r.hash)}`)),'Đã rút gốc + lãi trực tiếp trên Fuji.')},
-  'c-exit'(id){cAct(CH.exitLock(Number(id)).then(r=>icm('orchard','C-Chain',`exitLock(#${id}) · tx ${short(r.hash)}`)),'Đã rút gốc trực tiếp trên Fuji.')},
-  'c-water'(id){cAct(CH.water(Number(id)).then(()=>floatZ('orchard','Tưới #'+id,'#6cbde0')),'Đã tưới cây trên Game L1.')},
-  'c-collect'(){cAct(CH.collect(),'Đã gom điểm mùa.')},
-  'c-guard'(arg){cAct(CH.setGuard(arg==='1'))},
+    cAct(CH.plant(tier,v).then(r=>{sent('orchard',`plant(${TIERS[arg].name}, ${usd(v)})`)(r);floatZ('orchard','Gieo '+TIERS[arg].name)}),'Đã trồng cây.')},
+  'c-harvest'(id){cAct(CH.harvest(Number(id)).then(r=>{sent('orchard',`harvest(#${id})`)(r);floatZ('orchard','Thu hoạch #'+id,'#86d36f')}),'Đã thu hoạch, gốc + lãi về ví.')},
+  'c-uproot'(id){cAct(CH.uproot(Number(id)).then(sent('orchard',`uproot(#${id})`)),'Đã nhổ sớm, gốc về ví.')},
+  'c-water'(id){cAct(CH.water(Number(id)).then(r=>{sent('orchard',`water(#${id})`)(r);floatZ('orchard','Tưới #'+id,'#6cbde0')}),'Đã tưới cây.')},
+  'c-collect'(){cAct(CH.collect().then(sent('neighbor','collect()')),'Đã gom điểm mùa.')},
+  'c-guard'(arg){cAct(CH.setGuard(arg==='1').then(sent('neighbor','setGuard()')))},
   'c-steal'(){const a=($('#steal-addr')?.value||'').trim();if(!/^0x[0-9a-fA-F]{40}$/.test(a))return toast('Nhập địa chỉ ví 0x… của bạn bè.');if(a.toLowerCase()===CH.account.toLowerCase())return toast('Không tự hái trộm vườn mình được.');
-    cAct(CH.steal(a).then(()=>{floater(41.5,12,'Hái trộm!','#f2c14e');icm('neighbor','Game L1',`steal(${short(a)})`)}),'Đã hái trộm.')},
+    cAct(CH.steal(a).then(r=>{sent('neighbor',`steal(${short(a)})`)(r);floater(41.5,12,'Hái trộm!','#f2c14e')}),'Đã hái trộm.')},
 });
-let liveInit=false;const prevStatus={};
+let liveInit=false;
+async function connectWith(kind){
+  const w=$('#b-wallet');w.textContent='Đang kết nối…';
+  try{await CH.connect(kind)}catch(e){w.textContent='Kết nối ví';w.classList.add('primary');toast(CH.errMsg?CH.errMsg(e):String(e.message||e))}
+}
 CH.on?.(()=>{
   if(!CH.live||!CH.data){renderStats();return}
   const d=CH.data;
@@ -588,31 +609,18 @@ CH.on?.(()=>{
     st.locks=[];st.butler.lastMove=-9;
     document.querySelectorAll('[data-speed]').forEach(b=>{b.disabled=true;b.title='On-chain: 1 ngày game = '+CH.cfg.dayLength+' giây'});
     const w=$('#b-wallet');w.textContent=short(CH.account);w.classList.remove('primary');
-    icm('gate','Game L1','Đã kết nối ví '+short(CH.account)+' với '+CH.cfg.cchain.name+(CH.hasL1?' và '+CH.cfg.l1.name:''));
-    toast('Đã kết nối. Ruộng rau, Vườn cây và Vườn hàng xóm giờ chạy on-chain.');
+    icm('gate','C-Chain','Đã vào nông trại bằng '+(CH.walletKind==='game'?'ví trong game ':'MetaMask ')+short(CH.account));
+    toast(CH.gasless?'Đã kết nối. Mọi thao tác miễn phí gas.':'Đã kết nối.');
     if(current)openZone(current);
   }
   st.day=Date.now()/1000/CH.cfg.dayLength;
   st.lend={p:d.lendPrincipal,acc:d.lendPending};
   st.points=d.farmer.points;
-  // Trees grow on the L1 clock; the extra 2 settle days keep the C-Chain lock ripe first.
   st.locks=d.crops.filter(c=>c.status==='Growing').slice(-SPOTS.length)
-    .map(c=>({id:c.id,amt:c.amount,days:c.days,apy:TIERS[c.days].apy,start:c.plantedAt/CH.cfg.dayLength+2}));
-  for(const c of d.crops){const p=prevStatus[c.id],k=c.lock,key=c.status+'|'+(k.open?'open':k.exists?'closed':'none');
-    if(p&&p!==key){
-      if(k.open&&p.endsWith('|none')){icm('orchard','C-Chain',`ICM đã tới: FarmVault khóa ${usd(c.amount)} cho cây #${c.id}`);floatZ('orchard','#'+c.id+' đã khóa','#86d36f')}
-      else if(!k.open&&k.exists&&p.endsWith('|open')){icm('orchard','C-Chain',`ICM đã tới: FarmVault trả tiền cây #${c.id}`);floatZ('orchard','USDC về ví','#86d36f')}
-      else if(c.status==='Failed')toast('Cây #'+c.id+' thất bại: kiểm tra số dư USDC và quyền cho phép trên Fuji.');
-    }
-    prevStatus[c.id]=key}
+    .map(c=>({id:c.id,amt:c.amount,days:c.days,apy:TIERS[c.days].apy,start:c.plantedAt/CH.cfg.dayLength}));
   renderHud();renderStats();
 });
-$('#b-wallet').onclick=async()=>{
-  if(CH.live){openZone('home');return}
-  if(!CH.available)return toast(CH.reason);
-  const w=$('#b-wallet');w.textContent='Đang kết nối…';
-  try{await CH.connect()}catch(e){w.textContent='Kết nối ví';toast(CH.errMsg?CH.errMsg(e):String(e.message||e))}
-};
+$('#b-wallet').onclick=()=>openZone('wallet');
 
 /* morph: patch DOM in place so buttons under the cursor survive re-renders */
 function morph(el,html){
@@ -651,12 +659,12 @@ $('#panel').addEventListener('input',()=>{if(current==='market')renderStats()});
 $('#panel').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){const b=$('#p-actions .btn.primary,#p-actions .tier');b?.click()}});
 $('#p-close').onclick=closePanel;
 $('#b-design').onclick=()=>openZone('design');
-$('#b-storm').onclick=()=>{st.storm=1.5;toast('Bão đang tới: giá AVAX sẽ giảm mạnh trong 1,5 ngày.');icm('gate','C → L1','Oracle: cảnh báo bão, giá AVAX lao dốc')};
+$('#b-storm').onclick=()=>{st.storm=1.5;toast('Bão đang tới: giá AVAX sẽ giảm mạnh trong 1,5 ngày.');icm('gate','C-Chain','Oracle: cảnh báo bão, giá AVAX lao dốc')};
 document.querySelectorAll('[data-speed]').forEach(b=>b.onclick=()=>{st.speed=Number(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(x=>x.classList.toggle('on',x===b))});
 
 function renderLog(){
   const el=$('#log');const rows=st.log.slice(-3).reverse();
-  el.innerHTML='<h3>Thư ICM gần nhất</h3>'+(rows.map(l=>`<p>${chainChip(l.route)}<span>${esc(l.text)}</span></p>`).join('')||'<p class="dim">Chưa có thư nào.</p>');
+  el.innerHTML='<h3>Nhật ký giao dịch</h3>'+(rows.map(l=>`<p>${chainChip(l.route)}<span>${esc(l.text)}</span></p>`).join('')||'<p class="dim">Chưa có thư nào.</p>');
 }
 let lastP=0;
 function renderHud(){
@@ -881,8 +889,8 @@ function frame(now){
 }
 resize();buildStatic();
 (document.fonts?.ready||Promise.resolve()).then(()=>{buildStatic()});
-icm('lend','L1 → C-Chain','Gieo hạt: deposit(300,00 USDC) vào LendingVault');
-icm('orchard','L1 → C-Chain','Trồng Cây ớt: lock(100,00 USDC, 7 ngày) vào StakingVault');
+icm('lend','Ký → Fee manager','Gieo hạt: deposit(300,00 USDC) vào FarmGame');
+icm('orchard','Ký → Fee manager','Trồng Cây ớt: plant(100,00 USDC, 7 ngày) vào FarmGame');
 letters.length=0;
 renderLog();renderHud();openZone('home');
 window.__farm={st,openZone,ACT,sim};

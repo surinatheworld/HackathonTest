@@ -14,8 +14,8 @@ async function main() {
 
   const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL || fuji.rpc || "https://api.avax-test.network/ext/bc/C/rpc");
   const agent = new ethers.Wallet(process.env.AGENT_PRIVATE_KEY, provider);
-  const usdc = new ethers.Contract(fuji.usdc, abi("cchain/MockUSDC.sol/MockUSDC"), provider);
-  const vault = new ethers.Contract(fuji.vault, abi("cchain/FarmVault.sol/FarmVault"), provider);
+  const usdc = new ethers.Contract(fuji.usdc, abi(fuji.game ? "gasless/GaslessUSDC.sol/GaslessUSDC" : "cchain/MockUSDC.sol/MockUSDC"), provider);
+  const vault = new ethers.Contract(fuji.game || fuji.vault, abi(fuji.game ? "gasless/FarmGame.sol/FarmGame" : "cchain/FarmVault.sol/FarmVault"), provider);
   const butler = new ethers.Contract(fuji.butler, abi("cchain/ButlerAccount.sol/ButlerAccount"), agent);
   const U = (n) => ethers.parseUnits(String(n), 6);
   const fmt = (v) => ethers.formatUnits(v, 6);
@@ -33,7 +33,7 @@ async function main() {
 
   if ((await usdc.allowance(butler.target, vault.target)) < U(1_000_000)) {
     await (await butler.execute(usdc.target, usdc.interface.encodeFunctionData("approve", [vault.target, ethers.MaxUint256]))).wait();
-    console.log("Agent: approve(FarmVault) ✓ (không tính vào hạn mức)");
+    console.log("Agent: approve(FarmGame) ✓ (không tính vào hạn mức)");
   }
   let amt = U(50);
   if (left < amt) amt = left;

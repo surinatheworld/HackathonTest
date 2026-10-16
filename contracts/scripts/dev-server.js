@@ -1,17 +1,19 @@
 // npm run local
-// Offline demo: Hardhat node + local deploy + a relayer loop + static server for the game.
-// Open http://localhost:8790 . Add ?wallet=dev to use a built-in dev wallet instead of MetaMask/Core.
+// Offline demo of the gasless game: Hardhat node + local deploy + the same fee manager code as the
+// Cloudflare Pages Function (functions/_lib/relay-core.js) + a static server. Open http://localhost:8790
 const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { ethers } = require("ethers");
+const { pathToFileURL } = require("url");
 
 const ROOT = path.join(__dirname, "..");
 const WEB = path.join(ROOT, "..");
 const PORT = Number(process.env.PORT || 8790);
 const RPC_PORT = Number(process.env.RPC_PORT || 8545);
 const RPC = `http://127.0.0.1:${RPC_PORT}`;
+// Hardhat's well-known account #0: pays gas for relayed requests on the local chain only.
+const LOCAL_RELAYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const HH = path.join(path.dirname(require.resolve("hardhat/package.json")), "internal", "cli", "bootstrap.js");
 const children = [];
 
@@ -37,19 +39,21 @@ function run(args) {
 }
 
 function configJs(d) {
-  const net = (name, extra) => `{chainId:31337,name:${JSON.stringify(name)},rpc:location.origin+"/rpc",explorer:"",currency:"ETH",${extra}}`;
   return `// Local dev config served by dev-server.js
-window.FARM_CONFIG={dayLength:${d.dayLength},local:true,
-cchain:${net("Local C-Chain", `blockchainID:"${d.cID}",usdc:"${d.usdc}",vault:"${d.vault}"`)},
-l1:${net("Local Farm L1", `blockchainID:"${d.lID}",land:"${d.land}"`)}};
-if(!window.ethereum&&/[?&]wallet=dev/.test(location.search)){
-  const rpc=async(method,params=[])=>{const r=await fetch("/rpc",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:Date.now(),method,params})});const j=await r.json();if(j.error){const e=new Error(j.error.message);e.code=j.error.code;e.data=j.error.data;throw e}return j.result};
-  window.ethereum={isDevWallet:true,on(){},async request({method,params}){
-    if(method==="eth_requestAccounts"||method==="eth_accounts")return [(await rpc("eth_accounts"))[1]];
-    if(method==="wallet_switchEthereumChain"||method==="wallet_addEthereumChain")return null;
-    return rpc(method,params)}};
-}
+window.FARM_CONFIG={dayLength:${d.dayLength},relayUrl:"/api/relay",local:true,
+cchain:{chainId:31337,name:"Local C-Chain",rpc:location.origin+"/rpc",explorer:"",currency:"ETH",forwarder:"${d.forwarder}",usdc:"${d.usdc}",game:"${d.game}",butler:"${d.butler}"}};
 `;
+}
+
+async function readBody(req) {
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  return Buffer.concat(chunks);
+}
+
+async function sendResponse(res, r) {
+  res.writeHead(r.status, { "content-type": "application/json", "cache-control": "no-store" });
+  res.end(await r.text());
 }
 
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml" };
@@ -60,56 +64,47 @@ async function main() {
   await waitForRpc();
   await run(["run", "scripts/deploy-local.js", "--network", "localhost"]);
   const d = JSON.parse(fs.readFileSync(path.join(ROOT, "deployments", "local.json"), "utf8"));
-
-  // Relayer stand-in: deliver queued ICM messages every 2 s, like a real relayer would.
-  const provider = new ethers.JsonRpcProvider(RPC);
-  const relayer = await provider.getSigner(0);
-  const tele = new ethers.Contract(d.teleporter, ["function pending() view returns (uint256)", "function deliverNext()"], relayer);
-  setInterval(async () => {
-    try {
-      while ((await tele.pending()) > 0n) {
-        await (await tele.deliverNext()).wait();
-        console.log("[relayer] delivered 1 ICM message");
-      }
-    } catch (e) {
-      console.error("[relayer]", e.shortMessage || e.message);
-    }
-  }, 2000);
+  const core = await import(pathToFileURL(path.join(WEB, "functions", "_lib", "relay-core.js")).href);
+  const relayConfig = { chainId: 31337, rpc: RPC, forwarder: d.forwarder, game: d.game, usdc: d.usdc };
+  const env = { RELAYER_PRIVATE_KEY: LOCAL_RELAYER_KEY, FUJI_RPC_URL: RPC };
 
   http
     .createServer(async (req, res) => {
       const url = new URL(req.url, "http://x");
-      if (url.pathname === "/rpc" && req.method === "POST") {
-        const chunks = [];
-        for await (const c of req) chunks.push(c);
-        try {
-          const r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: Buffer.concat(chunks) });
-          res.writeHead(r.status, { "content-type": "application/json" });
-          res.end(await r.text());
-        } catch (e) {
-          res.writeHead(502);
-          res.end(String(e));
+      try {
+        if (url.pathname === "/rpc" && req.method === "POST") {
+          const r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: await readBody(req) });
+          return sendResponse(res, r);
         }
-        return;
-      }
-      if (url.pathname === "/prototype/chain-config.js") {
-        res.writeHead(200, { "content-type": TYPES[".js"], "cache-control": "no-store" });
-        res.end(configJs(d));
-        return;
+        if (url.pathname === "/api/relay") {
+          if (req.method === "POST") {
+            const body = JSON.parse((await readBody(req)).toString() || "{}");
+            const r = await core.relay(body, env, relayConfig);
+            console.log("[fee manager]", r.status, body?.request?.data?.slice(0, 10));
+            return sendResponse(res, r);
+          }
+          return sendResponse(res, await core.relayStatus(env, relayConfig));
+        }
+        if (url.pathname === "/prototype/chain-config.js") {
+          res.writeHead(200, { "content-type": TYPES[".js"], "cache-control": "no-store" });
+          return res.end(configJs(d));
+        }
+      } catch (e) {
+        res.writeHead(500, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ error: e.message }));
       }
       // Serve only the game: index.html and prototype/. Never the rest of the repo (contracts/.env).
       const rel = url.pathname === "/" ? "index.html" : path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "");
       const file = path.join(WEB, rel);
-      const allowed = rel === "index.html" || rel === "deploy.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
+      const allowed = rel === "index.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
       if (!allowed || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
         res.writeHead(404);
-        res.end("Not found");
-        return;
+        return res.end("Not found");
       }
       res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
       fs.createReadStream(file).pipe(res);
     })
-    .listen(PORT, () => console.log(`Game: http://localhost:${PORT}  (dev wallet: http://localhost:${PORT}/?wallet=dev)`));
+    .listen(PORT, () => console.log(`Game: http://localhost:${PORT}`));
 }
 
 const stop = () => {

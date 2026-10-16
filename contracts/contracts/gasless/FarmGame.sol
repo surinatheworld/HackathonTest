@@ -1,0 +1,283 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC2771Context} from "@openzeppelin/contracts/metatx/ERC2771Context.sol";
+
+/// Nông Trại DeFi on a single chain (Fuji C-Chain), gasless through FarmForwarder.
+///  - Ruộng rau: open lending, 4% APY.
+///  - Vườn cây: tiered locks (7 / 30 / 90 game days at 6 / 9 / 14% APY) shown as crops.
+///  - Game loop: water, collect, steal season points.
+/// Every player action uses _msgSender(), so it works both as a normal tx and as a relayed one.
+contract FarmGame is ERC2771Context {
+    using SafeERC20 for IERC20;
+
+    uint256 private constant BPS = 10_000;
+    uint256 private constant YEAR_DAYS = 365;
+    uint256 public constant LEND_APY_BPS = 400;
+    uint16 public constant MAX_ACTIVE_CROPS = 12;
+
+    enum Status {
+        None,
+        Growing,
+        Harvested,
+        Uprooted
+    }
+
+    struct Crop {
+        address owner;
+        uint8 tier;
+        Status status;
+        uint64 plantedAt;
+        uint64 lastWateredDay;
+        uint256 amount;
+        uint256 payout;
+    }
+
+    struct Farmer {
+        uint256 points;
+        uint256 ripePoints;
+        uint32 streak;
+        uint64 lastWaterDay;
+        uint64 lastStealDay;
+        bool guarded;
+        uint16 activeCrops;
+    }
+
+    struct Lend {
+        uint256 principal;
+        uint256 accrued;
+        uint64 last;
+    }
+
+    IERC20 public immutable usdc;
+    uint256 public immutable dayLength;
+    address public owner;
+    uint256 public rewardReserve;
+    uint256 public totalLent;
+    uint256 public totalLocked;
+    uint256 public nextCropId = 1;
+
+    mapping(address => Lend) public lends;
+    mapping(uint256 => Crop) public crops;
+    mapping(address => uint256[]) private _cropsOf;
+    mapping(address => Farmer) public farmers;
+
+    event RewardsFunded(address indexed from, uint256 amount);
+    event Deposited(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event YieldClaimed(address indexed user, uint256 amount);
+    event Planted(uint256 indexed cropId, address indexed owner, uint8 tier, uint256 amount);
+    event CropClosed(uint256 indexed cropId, Status status, uint256 payout);
+    event Watered(uint256 indexed cropId, address indexed owner, uint256 ripePoints, uint32 streak);
+    event Collected(address indexed owner, uint256 amount);
+    event Stolen(address indexed thief, address indexed victim, uint256 amount);
+    event GuardSet(address indexed owner, bool guarded);
+
+    error NotOwner();
+    error ZeroAmount();
+    error InsufficientPrincipal();
+    error BadTier();
+    error FarmFull();
+    error NotYourCrop();
+    error WrongStatus(Status status);
+    error NotRipe(uint256 readyAt);
+    error AlreadyWateredToday();
+    error Guarded();
+    error StealCooldown();
+    error NothingToSteal();
+
+    constructor(address forwarder, address usdc_, uint256 dayLength_) ERC2771Context(forwarder) {
+        usdc = IERC20(usdc_);
+        dayLength = dayLength_;
+        owner = msg.sender;
+    }
+
+    function transferOwnership(address next) external {
+        if (_msgSender() != owner) revert NotOwner();
+        owner = next;
+    }
+
+    function tierDays(uint8 tier) public pure returns (uint256) {
+        return tier == 0 ? 7 : tier == 1 ? 30 : 90;
+    }
+
+    function tierApyBps(uint8 tier) public pure returns (uint256) {
+        return tier == 0 ? 600 : tier == 1 ? 900 : 1400;
+    }
+
+    function today() public view returns (uint64) {
+        return uint64(block.timestamp / dayLength);
+    }
+
+    function fundRewards(uint256 amount) external {
+        usdc.safeTransferFrom(_msgSender(), address(this), amount);
+        rewardReserve += amount;
+        emit RewardsFunded(_msgSender(), amount);
+    }
+
+    // ---------- Ruộng rau ----------
+
+    function deposit(uint256 amount) external {
+        if (amount == 0) revert ZeroAmount();
+        address u = _msgSender();
+        _accrue(u);
+        usdc.safeTransferFrom(u, address(this), amount);
+        lends[u].principal += amount;
+        totalLent += amount;
+        emit Deposited(u, amount);
+    }
+
+    function withdraw(uint256 amount) external {
+        address u = _msgSender();
+        _accrue(u);
+        Lend storage l = lends[u];
+        if (amount == 0) revert ZeroAmount();
+        if (amount > l.principal) revert InsufficientPrincipal();
+        l.principal -= amount;
+        totalLent -= amount;
+        usdc.safeTransfer(u, amount);
+        emit Withdrawn(u, amount);
+    }
+
+    function claim() external returns (uint256 paid) {
+        address u = _msgSender();
+        _accrue(u);
+        Lend storage l = lends[u];
+        paid = _takeReward(l.accrued);
+        l.accrued -= paid;
+        if (paid > 0) usdc.safeTransfer(u, paid);
+        emit YieldClaimed(u, paid);
+    }
+
+    function pendingYield(address user) public view returns (uint256) {
+        Lend memory l = lends[user];
+        return l.accrued + (l.principal * LEND_APY_BPS * (block.timestamp - l.last)) / (BPS * YEAR_DAYS * dayLength);
+    }
+
+    // ---------- Vườn cây ----------
+
+    function plant(uint8 tier, uint256 amount) external returns (uint256 cropId) {
+        if (tier > 2) revert BadTier();
+        if (amount == 0) revert ZeroAmount();
+        address u = _msgSender();
+        Farmer storage f = farmers[u];
+        if (f.activeCrops >= MAX_ACTIVE_CROPS) revert FarmFull();
+        usdc.safeTransferFrom(u, address(this), amount);
+        f.activeCrops++;
+        totalLocked += amount;
+        cropId = nextCropId++;
+        crops[cropId] = Crop(u, tier, Status.Growing, uint64(block.timestamp), 0, amount, 0);
+        _cropsOf[u].push(cropId);
+        emit Planted(cropId, u, tier, amount);
+    }
+
+    function readyAt(uint256 cropId) public view returns (uint256) {
+        Crop memory c = crops[cropId];
+        return c.plantedAt + tierDays(c.tier) * dayLength;
+    }
+
+    function cropYield(uint256 cropId) public view returns (uint256) {
+        Crop memory c = crops[cropId];
+        if (c.status != Status.Growing) return 0;
+        uint256 elapsed = block.timestamp - c.plantedAt;
+        uint256 cap = tierDays(c.tier) * dayLength;
+        if (elapsed > cap) elapsed = cap;
+        return (c.amount * tierApyBps(c.tier) * elapsed) / (BPS * YEAR_DAYS * dayLength);
+    }
+
+    function harvest(uint256 cropId) external {
+        Crop storage c = _own(cropId);
+        uint256 ripe = readyAt(cropId);
+        if (block.timestamp < ripe) revert NotRipe(ripe);
+        uint256 payout = c.amount + _takeReward(cropYield(cropId));
+        farmers[c.owner].points += c.amount / 1e6;
+        _close(cropId, Status.Harvested, payout);
+    }
+
+    /// Pull the crop early: principal back, yield forfeited.
+    function uproot(uint256 cropId) external {
+        Crop storage c = _own(cropId);
+        _close(cropId, Status.Uprooted, c.amount);
+    }
+
+    // ---------- game loop ----------
+
+    function water(uint256 cropId) external {
+        Crop storage c = _own(cropId);
+        uint64 d = today();
+        if (c.lastWateredDay == d) revert AlreadyWateredToday();
+        c.lastWateredDay = d;
+        Farmer storage f = farmers[c.owner];
+        if (f.lastWaterDay != d) {
+            f.streak = f.lastWaterDay + 1 == d ? f.streak + 1 : 1;
+            f.lastWaterDay = d;
+        }
+        uint256 gain = 2 + (f.streak > 7 ? 7 : f.streak);
+        f.ripePoints += gain;
+        emit Watered(cropId, c.owner, gain, f.streak);
+    }
+
+    function collect() external {
+        Farmer storage f = farmers[_msgSender()];
+        uint256 n = f.ripePoints;
+        f.ripePoints = 0;
+        f.points += n;
+        emit Collected(_msgSender(), n);
+    }
+
+    function steal(address victim) external {
+        Farmer storage v = farmers[victim];
+        Farmer storage t = farmers[_msgSender()];
+        if (v.guarded) revert Guarded();
+        uint64 d = today();
+        if (t.lastStealDay == d && t.lastStealDay != 0) revert StealCooldown();
+        uint256 n = (v.ripePoints * 40) / 100;
+        if (n == 0) revert NothingToSteal();
+        t.lastStealDay = d;
+        v.ripePoints -= n;
+        t.points += n;
+        emit Stolen(_msgSender(), victim, n);
+    }
+
+    function setGuard(bool guarded) external {
+        farmers[_msgSender()].guarded = guarded;
+        emit GuardSet(_msgSender(), guarded);
+    }
+
+    function cropsOf(address who) external view returns (uint256[] memory ids, Crop[] memory list) {
+        ids = _cropsOf[who];
+        list = new Crop[](ids.length);
+        for (uint256 i; i < ids.length; i++) list[i] = crops[ids[i]];
+    }
+
+    // ---------- internals ----------
+
+    function _own(uint256 cropId) private view returns (Crop storage c) {
+        c = crops[cropId];
+        if (c.owner != _msgSender()) revert NotYourCrop();
+        if (c.status != Status.Growing) revert WrongStatus(c.status);
+    }
+
+    function _close(uint256 cropId, Status s, uint256 payout) private {
+        Crop storage c = crops[cropId];
+        c.status = s;
+        c.payout = payout;
+        totalLocked -= c.amount;
+        farmers[c.owner].activeCrops--;
+        usdc.safeTransfer(c.owner, payout);
+        emit CropClosed(cropId, s, payout);
+    }
+
+    function _accrue(address u) private {
+        Lend storage l = lends[u];
+        if (l.last != 0) l.accrued += (l.principal * LEND_APY_BPS * (block.timestamp - l.last)) / (BPS * YEAR_DAYS * dayLength);
+        l.last = uint64(block.timestamp);
+    }
+
+    function _takeReward(uint256 want) private returns (uint256 got) {
+        got = want > rewardReserve ? rewardReserve : want;
+        rewardReserve -= got;
+    }
+}
