@@ -64,4 +64,13 @@ function writeFrontendConfig() {
   return out;
 }
 
-module.exports = { TELEPORTER, DAY_LENGTH, load, save, blockchainID, requireTeleporter, writeFrontendConfig };
+/** Reads prototype/chain-config.js (written by link.js or sync-config.js). */
+function loadWebConfig() {
+  const f = path.join(__dirname, "..", "..", "prototype", "chain-config.js");
+  if (!fs.existsSync(f)) return null;
+  const m = fs.readFileSync(f, "utf8").match(/window\.FARM_CONFIG\s*=\s*([\s\S]*?);\s*$/m);
+  if (!m || m[1].trim() === "null") return null;
+  return JSON.parse(m[1]);
+}
+
+module.exports = { TELEPORTER, DAY_LENGTH, load, save, blockchainID, requireTeleporter, writeFrontendConfig, loadWebConfig };

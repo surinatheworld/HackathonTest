@@ -11,6 +11,7 @@ contract MockTeleporter {
         address from;
         bytes32 destinationChainID;
         address to;
+        uint256 gasLimit;
         bytes message;
     }
 
@@ -24,7 +25,14 @@ contract MockTeleporter {
 
     function sendCrossChainMessage(TeleporterMessageInput calldata input) external returns (bytes32) {
         _queue.push(
-            Envelope(chainOf[msg.sender], msg.sender, input.destinationBlockchainID, input.destinationAddress, input.message)
+            Envelope(
+                chainOf[msg.sender],
+                msg.sender,
+                input.destinationBlockchainID,
+                input.destinationAddress,
+                input.requiredGasLimit,
+                input.message
+            )
         );
         return bytes32(_queue.length);
     }
@@ -35,7 +43,8 @@ contract MockTeleporter {
 
     function deliverNext() external {
         Envelope memory e = _queue[head++];
-        ITeleporterReceiver(e.to).receiveTeleporterMessage(e.sourceChainID, e.from, e.message);
+        // Like TeleporterMessenger, give the receiver exactly the gas the sender asked for.
+        ITeleporterReceiver(e.to).receiveTeleporterMessage{gas: e.gasLimit}(e.sourceChainID, e.from, e.message);
     }
 
     /// Lets tests forge a message from any sender to check the receiver's guards.

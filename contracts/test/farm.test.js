@@ -102,6 +102,31 @@ describe("Vườn cây: ICM plant / harvest", () => {
   });
 });
 
+describe("ICM gas budget", () => {
+  it("delivers every message within requiredGasLimit", async () => {
+    const { alice, token, vault, land, relay } = await deploy();
+    expect(await vault.requiredGasLimit()).to.equal(1_000_000n);
+    expect(await land.requiredGasLimit()).to.equal(1_000_000n);
+    await token.connect(alice).approve(vault, usdc(100));
+    await land.connect(alice).plant(0, usdc(100));
+    await relay(); // reverts with out-of-gas if the budget is too small
+    await time.increase(7 * DAY + 1);
+    await land.connect(alice).harvest(1);
+    await relay();
+    const [, list] = await land.cropsOf(alice);
+    expect(list[0].status).to.equal(S.Harvested);
+  });
+
+  it("a too-small budget fails delivery instead of half-applying", async () => {
+    const { owner, alice, token, tele, vault, land } = await deploy();
+    await land.connect(owner).setRequiredGasLimit(50_000);
+    await token.connect(alice).approve(vault, usdc(100));
+    await land.connect(alice).plant(0, usdc(100));
+    await expect(tele.deliverNext()).to.be.reverted;
+    expect(await token.balanceOf(alice)).to.equal(usdc(1000));
+  });
+});
+
 describe("Ruộng rau: lending", () => {
   it("accrues 4% APY in game days and pays from the reward reserve", async () => {
     const { alice, token, vault } = await deploy();

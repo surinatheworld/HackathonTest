@@ -94,8 +94,21 @@ a{color:var(--straw)}
     <pre class="log" id="l-link"></pre>
   </section>
 
+  <section class="card" id="c-butler">
+    <div class="head"><span class="num">BƯỚC 5</span><h2>Quản gia AI</h2><span class="tag" id="t-butler">Chưa cấp quyền</span></div>
+    <p class="muted">Cấp session key cho ví agent, đặt hạn mức chi mỗi ngày, nạp USDC test vào ButlerAccount và một ít AVAX làm gas cho agent (3 lần ký). Sau đó nhóm chạy <code>npm run butler:demo</code> để xem agent gửi tiền trong hạn mức và lệnh bị prompt injection bị revert.</p>
+    <div class="grid">
+      <label for="ag-addr">Địa chỉ ví agent<input id="ag-addr" value="0x6fC6866A2bcD264ABd80640D72659d0336A1550c" autocomplete="off" spellcheck="false"></label>
+      <label for="ag-cap">Hạn mức mỗi ngày (USDC)<input id="ag-cap" type="number" min="1" value="200"></label>
+      <label for="ag-usdc">Nạp vào ButlerAccount (USDC)<input id="ag-usdc" type="number" min="0" value="500"></label>
+      <label for="ag-gas">Gas cho agent (AVAX)<input id="ag-gas" type="number" min="0" step="0.01" value="0.1"></label>
+    </div>
+    <div class="row"><button class="primary" id="b-butler" disabled>Cấp quyền cho quản gia</button><button id="b-revoke" disabled>Thu hồi ngay (kill switch)</button></div>
+    <pre class="log" id="l-butler"></pre>
+  </section>
+
   <section class="card" id="c-out">
-    <div class="head"><span class="num">BƯỚC 5</span><h2>Kết quả</h2><span class="tag" id="t-out">Đang chờ</span></div>
+    <div class="head"><span class="num">BƯỚC 6</span><h2>Kết quả</h2><span class="tag" id="t-out">Đang chờ</span></div>
     <dl class="kv" id="summary"></dl>
     <p class="muted">Game trên trình duyệt này sẽ tự dùng cấu hình dưới đây. Để mọi người chơi được, gửi nội dung này cho nhóm để commit vào <code>prototype/chain-config.js</code>.</p>
     <textarea id="cfg" readonly aria-label="Nội dung chain-config.js"></textarea>
@@ -289,6 +302,35 @@ $("#b-link").onclick = () => guard("l-link", async () => {
   log("l-link", "ok", "Xong. Mở game, bấm Kết nối ví và thử trồng 1 cây ớt.");
 });
 
+// ---------- butler ----------
+$("#b-butler").onclick = () => guard("l-butler", async () => {
+  const f = st.fuji;
+  if (!f?.done) throw new Error("Làm bước 2 (Fuji) trước.");
+  const agent = $("#ag-addr").value.trim();
+  if (!E.isAddress(agent)) throw new Error("Địa chỉ ví agent không hợp lệ.");
+  const cap = Number($("#ag-cap").value), seed = Number($("#ag-usdc").value), gas = Number($("#ag-gas").value);
+  if (!(cap > 0)) throw new Error("Hạn mức phải lớn hơn 0.");
+  const b = (st.butlerSetup ||= {});
+  if (b.agent && b.agent.toLowerCase() !== agent.toLowerCase()) { b.agentSet = b.funded = b.gas = false; }
+  b.agent = E.getAddress(agent);
+  const s = await switchTo(FUJI);
+  const butler = new E.Contract(f.butler, A.ButlerAccount.abi, s);
+  await step("l-butler", `setAgent(${short(b.agent)}, ${cap} USDC/ngày)`, b.agentSet && b.cap === cap, async () => {
+    await (await butler.setAgent(b.agent, U(cap))).wait(); b.agentSet = true; b.cap = cap; save(); });
+  if (seed > 0) await step("l-butler", `Nạp ${seed} USDC test vào ButlerAccount`, b.funded, async () => {
+    await (await new E.Contract(f.usdc, A.MockUSDC.abi, s).mint(f.butler, U(seed))).wait(); b.funded = true; save(); });
+  if (gas > 0) await step("l-butler", `Gửi ${gas} ${FUJI.currency} làm gas cho agent`, b.gas, async () => {
+    await (await s.sendTransaction({ to: b.agent, value: E.parseEther(String(gas)) })).wait(); b.gas = true; save(); });
+  b.done = true; b.revoked = false; save();
+  log("l-butler", "ok", "Xong. Agent chỉ gọi được approve(FarmVault), deposit (tính hạn mức) và claim.");
+});
+$("#b-revoke").onclick = () => guard("l-butler", async () => {
+  const s = await switchTo(FUJI);
+  await step("l-butler", "revokeAgent()", false, async () => {
+    await (await new E.Contract(st.fuji.butler, A.ButlerAccount.abi, s).revokeAgent()).wait();
+    st.butlerSetup.revoked = true; st.butlerSetup.agentSet = false; st.butlerSetup.done = false; save(); });
+});
+
 // ---------- output ----------
 function config() {
   const f = st.fuji, l = st.l1;
@@ -312,7 +354,7 @@ $("#b-reset").onclick = () => {
   if (!resetArmed) { resetArmed = true; const w = $("#w-reset"); w.hidden = false; w.textContent = "Bấm lần nữa để xoá. Contract đã deploy vẫn còn trên chain, chỉ trình duyệt này quên địa chỉ."; return; }
   st = {}; resetArmed = false; $("#w-reset").hidden = true;
   try { localStorage.removeItem(KEY); localStorage.removeItem("farm-config"); } catch {}
-  ["l-fuji", "l-l1", "l-link"].forEach((id) => ($("#" + id).textContent = ""));
+  ["l-fuji", "l-l1", "l-link", "l-butler"].forEach((id) => ($("#" + id).textContent = ""));
   render();
 };
 
@@ -326,6 +368,10 @@ function render() {
   tag("#t-fuji", st.fuji?.done, "Xong", st.fuji ? "Đang làm dở" : "Chưa deploy");
   tag("#t-l1", st.l1?.done, "Xong", st.l1 ? "Đang làm dở" : "Chưa deploy");
   tag("#t-link", st.link?.fuji && st.link?.l1, "Đã nối", "Chưa nối");
+  tag("#t-butler", st.butlerSetup?.done, "Đã cấp quyền", st.butlerSetup?.revoked ? "Đã thu hồi" : "Chưa cấp quyền");
+  $("#b-butler").disabled = running || !account || !st.fuji?.done;
+  $("#b-revoke").disabled = running || !account || !st.butlerSetup?.done;
+  if (st.butlerSetup?.agent) $("#ag-addr").value = st.butlerSetup.agent;
   $("#b-connect").disabled = running || !!account;
   $("#b-fuji").disabled = running || !account;
   $("#b-check").disabled = running;

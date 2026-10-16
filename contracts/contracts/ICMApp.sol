@@ -41,7 +41,9 @@ abstract contract ICMApp is ITeleporterReceiver {
     address public owner;
     bytes32 public remoteChainID;
     address public remoteAddress;
-    uint256 public requiredGasLimit = 400_000;
+    /// Gas the destination must give receiveTeleporterMessage. Handling PLANT measured ~383k with a mock
+    /// messenger (it pulls USDC and sends a receipt back), so keep a wide margin; the owner can tune it.
+    uint256 public requiredGasLimit = 1_000_000;
 
     event RemoteSet(bytes32 chainID, address remote);
     event MessageSent(bytes32 messageID, uint8 kind, uint256 cropId);

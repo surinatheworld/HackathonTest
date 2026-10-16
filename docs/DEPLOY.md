@@ -24,6 +24,7 @@ Mở **https://hanazono-b9s.pages.dev/deploy.html**, kết nối Core/MetaMask b
 1. **Deploy lên Fuji**: MockUSDC, FarmVault (nạp 50.000 USDC test vào quỹ thưởng), ButlerAccount và 3 rule. Khoảng 9 lần ký, tốn 0,1–0,2 AVAX.
 2. **Farm L1**: điền RPC URL và Chain ID từ My L1 Dashboard, bấm **Kiểm tra L1** (kiểm tra RPC, chainId và TeleporterMessenger), rồi **Deploy FarmLand**.
 3. **Nối hai chain**: 2 lần ký `setRemote`.
+4. **Quản gia AI**: cấp session key cho ví agent (mặc định `0x6fC6866A2bcD264ABd80640D72659d0336A1550c`, khóa nằm trong `contracts/.env` của nhóm) với hạn mức 200 USDC/ngày, nạp 500 USDC test vào ButlerAccount, và gửi 0,1 AVAX làm gas cho agent. Nút **Thu hồi ngay** là kill switch.
 
 Ví bạn là deployer và owner của mọi contract. Trang không bao giờ hỏi private key. Tiến trình được lưu trong trình duyệt: đóng trang giữa chừng thì mở lại và bấm tiếp, các bước đã xong sẽ tự bỏ qua. Mới xong Fuji thì game đã chơi on-chain được Ruộng rau trên trình duyệt đó.
 
@@ -34,7 +35,14 @@ cd contracts
 npm run sync-config -- 0x54A2276F134d3Cfaa7572BC326092fABa6352888 --l1-rpc <RPC URL của Farm L1>
 ```
 
-Script tìm contract mà ví đã tạo trên Fuji, đọc địa chỉ FarmLand từ FarmVault, rồi ghi `prototype/chain-config.js`. Commit và push file đó, Cloudflare Pages sẽ cập nhật sau khoảng 1 phút. Cách khác là sao chép nội dung ở bước 5 của trang deploy.
+Sau đó, cũng trong `contracts/`:
+
+```bash
+npm run verify:fuji   # công khai source MockUSDC, FarmVault, ButlerAccount trên testnet.snowtrace.io
+npm run butler:demo   # agent gửi tiền trong hạn mức, lệnh bị prompt injection bị revert
+```
+
+Script sync-config tìm contract mà ví đã tạo trên Fuji, đọc địa chỉ FarmLand từ FarmVault, rồi ghi `prototype/chain-config.js`. Commit và push file đó, Cloudflare Pages sẽ cập nhật sau khoảng 1 phút. Cách khác là sao chép nội dung ở bước 5 của trang deploy.
 
 Các bước dưới đây là cách deploy bằng script (ví deploy riêng trong `.env`), dùng khi không deploy trên web.
 
@@ -116,7 +124,7 @@ Script trồng 1 cây ớt trên L1 và chờ biên nhận ICM từ C-Chain (t�
 npm run butler:demo
 ```
 
-Quản gia AI gửi tiền vào Ruộng rau trong hạn mức. Sau đó thử một lệnh bị prompt injection, chuyển hết USDC ra ngoài, và bị `ButlerAccount` revert ngay trên Fuji.
+Chỉ dùng ví agent (`AGENT_PRIVATE_KEY`), nên owner phải cấp quyền trước ở bước 4 của deploy.html (hoặc gọi `setAgent`). Quản gia AI gửi tiền vào Ruộng rau trong hạn mức. Sau đó thử một lệnh bị prompt injection, chuyển hết USDC ra ngoài, và bị `ButlerAccount` revert ngay trên Fuji.
 
 ## 8. Chơi trên testnet
 
@@ -127,7 +135,15 @@ Mở `index.html` qua GitHub Pages (Settings → Pages → nhánh `main`, thư m
 - **Vườn hàng xóm**: gom điểm, thuê người giữ vườn, hái trộm điểm của địa chỉ bạn bè trên L1.
 - Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn chạy mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
 
-## 9. Cloudflare Pages
+## 9. Verify source trên Snowtrace
+
+```bash
+npm run verify:fuji
+```
+
+Lệnh này verify MockUSDC, FarmVault và ButlerAccount qua API Etherscan-compatible của Routescan. Bytecode mà deploy.html dùng được xuất từ đúng lần compile này (`npm run export-web`), nên source luôn khớp. Mỗi lần sửa contract phải chạy lại `export-web` trước khi deploy. FarmLand trên Farm L1 chỉ verify được nếu L1 có explorer hỗ trợ API tương tự.
+
+## 10. Cloudflare Pages
 
 Site đang chạy tại **https://hanazono-b9s.pages.dev/**, tự build lại mỗi lần push lên `main`.
 
@@ -148,3 +164,5 @@ Site đang chạy tại **https://hanazono-b9s.pages.dev/**, tự build lại m�
 | Chạy trên Avalanche (L1 riêng, Fuji hoặc C-Chain) | Fuji C-Chain + Farm L1 |
 | Demo được | `npm run local` (offline) và testnet |
 | Bonus | ButlerAccount (agent guardrail, kill switch), tưới / streak / trộm điểm trên L1 |
+| Nêu đúng giới hạn pháp lý tại Việt Nam | README, mục "Giới hạn pháp lý tại Việt Nam" |
+| Gas cho ICM | `requiredGasLimit` = 1.000.000; test giả lập Teleporter cấp đúng hạn mức này |

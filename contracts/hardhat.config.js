@@ -1,5 +1,6 @@
 require("@nomicfoundation/hardhat-ethers");
 require("@nomicfoundation/hardhat-chai-matchers");
+require("@nomicfoundation/hardhat-verify");
 require("dotenv").config();
 
 const accounts = process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [];
@@ -25,4 +26,19 @@ module.exports = {
       accounts,
     },
   },
+  // Snowtrace (testnet) runs on Routescan's Etherscan-compatible API; any non-empty key works.
+  etherscan: {
+    apiKey: { fuji: process.env.SNOWTRACE_API_KEY || "snowtrace" },
+    customChains: [
+      {
+        network: "fuji",
+        chainId: 43113,
+        urls: {
+          apiURL: "https://api.routescan.io/v2/network/testnet/evm/43113/etherscan",
+          browserURL: "https://testnet.snowtrace.io",
+        },
+      },
+    ],
+  },
+  sourcify: { enabled: false },
 };
