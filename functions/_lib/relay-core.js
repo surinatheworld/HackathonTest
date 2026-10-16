@@ -29,40 +29,77 @@ const GAME_ABI = [
   "error Guarded()",
   "error StealCooldown()",
   "error NothingToSteal()",
+  "error NotAFarmer()",
+  "error CannotStealFromYourself()",
+];
+const TOKEN_ABI = [
+  "function faucet()",
+  "function approve(address spender, uint256 amount)",
   "error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)",
   "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
 ];
-const USDC_ABI = ["function faucet()", "function approve(address spender, uint256 amount)"];
+const COOP_ABI = [
+  "function depositCollateral(uint256 amount)",
+  "function withdrawCollateral(uint256 amount)",
+  "function borrow(uint256 amount)",
+  "function repay(address user, uint256 amount)",
+  "function liquidate(address user)",
+  "error ZeroAmount()",
+  "error InsufficientCollateral()",
+  "error ExceedsBorrowLimit(uint256 maxBorrow)",
+  "error NoDebt()",
+  "error NotLiquidatable(uint256 healthBps)",
+  "error StalePrice(uint256 updatedAt)",
+  "error BadPrice()",
+  "error NoLiquidity(uint256 available)",
+];
+const POND_ABI = [
+  "function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)",
+  "function zapIn(uint256 usdcAmount, uint256 minShares)",
+  "function removeLiquidity(uint256 shares, uint256 minUsdc, uint256 minAvax)",
+  "function zapOut(uint256 shares, uint256 minUsdc)",
+  "function swap(bool usdcIn, uint256 amountIn, uint256 minOut)",
+  "error ZeroAmount()",
+  "error Slippage(uint256 got, uint256 min)",
+  "error InsufficientShares()",
+  "error EmptyPool()",
+];
 const MAX_GAS = 800_000n;
 const MAX_DEADLINE_S = 3600;
 
 const gameIface = new ethers.Interface(GAME_ABI);
-const usdcIface = new ethers.Interface(USDC_ABI);
+const tokenIface = new ethers.Interface(TOKEN_ABI);
+const coopIface = new ethers.Interface(COOP_ABI);
+const pondIface = new ethers.Interface(POND_ABI);
+const ALL = [gameIface, coopIface, pondIface, tokenIface];
+
+// Which contracts the fee manager pays for, which functions on each, and where tokens may be approved.
+function targets(config) {
+  const a = (x) => (x ? ethers.getAddress(x) : null);
+  const spenders = [config.game, config.coop, config.pond].filter(Boolean).map(a);
+  const t = new Map([[a(config.game), { iface: gameIface }], [a(config.usdc), { iface: tokenIface, spenders }]]);
+  if (config.gavax) t.set(a(config.gavax), { iface: tokenIface, spenders: [config.coop, config.pond].filter(Boolean).map(a) });
+  if (config.coop) t.set(a(config.coop), { iface: coopIface });
+  if (config.pond) t.set(a(config.pond), { iface: pondIface });
+  return t;
+}
 
 function policy(config, req) {
-  const to = ethers.getAddress(req.to);
-  const sel = ethers.dataSlice(req.data, 0, 4);
-  if (to === ethers.getAddress(config.game)) {
-    const fn = gameIface.getFunction(sel);
-    if (!fn) return "Hàm này không được trả gas hộ.";
-    return null;
+  const rule = targets(config).get(ethers.getAddress(req.to));
+  if (!rule) return "Fee manager chỉ trả gas cho contract của Nông Trại DeFi.";
+  const fn = rule.iface.getFunction(ethers.dataSlice(req.data, 0, 4));
+  if (!fn) return "Hàm này không được trả gas hộ.";
+  if (fn.name === "approve") {
+    const [spender] = rule.iface.decodeFunctionData("approve", req.data);
+    if (!rule.spenders.includes(ethers.getAddress(spender))) return "Chỉ trả gas cho approve tới contract của Nông Trại DeFi.";
   }
-  if (to === ethers.getAddress(config.usdc)) {
-    const fn = usdcIface.getFunction(sel);
-    if (!fn) return "Hàm này không được trả gas hộ.";
-    if (fn.name === "approve") {
-      const [spender] = usdcIface.decodeFunctionData("approve", req.data);
-      if (ethers.getAddress(spender) !== ethers.getAddress(config.game)) return "Chỉ trả gas cho approve tới FarmGame.";
-    }
-    return null;
-  }
-  return "Fee manager chỉ trả gas cho contract của Nông Trại DeFi.";
+  return null;
 }
 
 function explain(e) {
   const data = e?.data || e?.info?.error?.data || e?.error?.data;
   if (data && typeof data === "string" && data.length >= 10) {
-    for (const iface of [gameIface, usdcIface]) {
+    for (const iface of ALL) {
       try {
         const p = iface.parseError(data);
         if (p) return p.name;

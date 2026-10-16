@@ -25,7 +25,7 @@ async function main() {
     if (process.env.AGENT_PRIVATE_KEY && (await butler.owner()).toLowerCase() === me.address.toLowerCase()) {
       const agent = new ethers.Wallet(process.env.AGENT_PRIVATE_KEY).address;
       if ((await butler.agent()) !== agent || !(await butler.agentActive())) {
-        await (await butler.setAgent(agent, U(process.env.AGENT_DAILY_CAP || 200))).wait();
+        await (await butler.setAgent(agent, U(process.env.AGENT_DAILY_CAP || 200), Math.floor(Date.now() / 1000) + 86400 * Number(process.env.AGENT_VALID_DAYS || 60))).wait();
         console.log(`ButlerAccount: agent ${agent} granted`);
       }
       if ((await usdc.balanceOf(butler.target)) < U(100)) {

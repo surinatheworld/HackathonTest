@@ -3,7 +3,8 @@ pragma solidity ^0.8.24;
 
 /// Nhà quản gia AI: a minimal smart account whose AI agent only holds a session key.
 /// Every agent call must match an owner-defined rule (target + selector, optional pinned
-/// first argument) and stay under a daily spending cap. The owner can revoke the agent at once.
+/// first argument) and stay under a daily spending cap. The session key expires on its own, and the
+/// owner can revoke it at once.
 contract ButlerAccount {
     struct Rule {
         bool allowed;
@@ -14,6 +15,7 @@ contract ButlerAccount {
     address public owner;
     address public agent;
     bool public agentActive;
+    uint64 public agentValidUntil;
     uint256 public dailyCap;
     uint256 public spentToday;
     uint256 public spendDay;
@@ -21,7 +23,8 @@ contract ButlerAccount {
 
     mapping(address => mapping(bytes4 => Rule)) public rules;
 
-    event AgentSet(address indexed agent, uint256 dailyCap);
+    event AgentSet(address indexed agent, uint256 dailyCap, uint64 validUntil);
+    event OwnershipTransferred(address indexed previous, address indexed next);
     event AgentRevoked(address indexed agent);
     event RuleSet(address indexed target, bytes4 indexed selector, bool allowed, uint8 amountArg, address firstArg);
     event Executed(address indexed by, address indexed target, bytes4 indexed selector, uint256 counted);
@@ -29,6 +32,8 @@ contract ButlerAccount {
     error NotOwner();
     error NotAuthorized();
     error AgentIsRevoked();
+    error AgentExpired(uint64 validUntil);
+    error BadExpiry();
     error CallNotAllowed(address target, bytes4 selector);
     error ArgumentNotAllowed(address expected, address got);
     error DailyCapExceeded(uint256 requested, uint256 remaining);
@@ -44,15 +49,19 @@ contract ButlerAccount {
         dayLength = dayLength_;
     }
 
-    function setAgent(address agent_, uint256 dailyCap_) external onlyOwner {
+    /// Grant a session key until `validUntil` (unix seconds). Re-grant to extend it.
+    function setAgent(address agent_, uint256 dailyCap_, uint64 validUntil) external onlyOwner {
+        if (validUntil <= block.timestamp) revert BadExpiry();
         agent = agent_;
         dailyCap = dailyCap_;
+        agentValidUntil = validUntil;
         agentActive = true;
-        emit AgentSet(agent_, dailyCap_);
+        emit AgentSet(agent_, dailyCap_, validUntil);
     }
 
     /// Hand the account to its real owner after a scripted setup.
     function transferOwnership(address next) external onlyOwner {
+        emit OwnershipTransferred(owner, next);
         owner = next;
     }
 
@@ -80,6 +89,7 @@ contract ButlerAccount {
         if (msg.sender != owner) {
             if (msg.sender != agent) revert NotAuthorized();
             if (!agentActive) revert AgentIsRevoked();
+            if (block.timestamp > agentValidUntil) revert AgentExpired(agentValidUntil);
             counted = _checkPolicy(target, data);
         }
         bool ok;

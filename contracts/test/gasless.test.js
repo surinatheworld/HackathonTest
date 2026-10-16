@@ -141,6 +141,11 @@ describe("Gasless farm on Fuji (ERC-2771 fee manager)", () => {
     await time.increase(DAY);
     await relay(alice, game, "water", [1]);
     expect((await game.farmers(alice.address)).ripePoints).to.equal(7n);
+    // A wallet with nothing planted cannot steal, so throwaway wallets cannot farm points through the relay.
+    await expect(relay(bob, game, "steal", [alice.address])).to.be.reverted;
+    await relay(bob, token, "faucet", []);
+    await relay(bob, token, "approve", [await game.getAddress(), ethers.MaxUint256]);
+    await relay(bob, game, "plant", [0, usdc(10)]);
     await relay(bob, game, "steal", [alice.address]);
     expect((await game.farmers(bob.address)).points).to.equal(2n);
     await relay(alice, game, "setGuard", [true]);

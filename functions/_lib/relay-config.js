@@ -2,7 +2,10 @@
 export default {
   "chainId": 43113,
   "rpc": "https://api.avax-test.network/ext/bc/C/rpc",
-  "forwarder": "0xda504CC0E7eA94d7aB97F0c0b03bBA1A1D8b0368",
-  "game": "0xEa6351629bf8b11f1d6B303e29781cD99723234F",
-  "usdc": "0xC76C1B20EC95389d8418AFE3f1600A1dE8BbC219"
+  "forwarder": "0x2B799E755a2BEd299286e177FDE9495b79401FFF",
+  "game": "0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e",
+  "usdc": "0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC",
+  "gavax": "0xc0c27243221de25a961D8B20274cbFc2196f8D4C",
+  "coop": "0x850aE1CF266CF902E443a82f1d94C3d94753d946",
+  "pond": "0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe"
 };

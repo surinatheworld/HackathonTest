@@ -12,33 +12,63 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
  Trình duyệt người chơi                     Cloudflare Pages                 Fuji C-Chain
  ┌──────────────────────┐   ký EIP-712     ┌──────────────────────┐  tx   ┌─────────────────────────┐
  │ Game 2D (index.html) │ ───────────────▶ │ Fee manager          │ ────▶ │ FarmForwarder (ERC-2771)│
- │ Ví trong game        │   (miễn phí)     │ functions/api/relay  │ trả   │   ├─▶ FarmGame          │
- │ hoặc MetaMask / Core │                  │ chỉ chuyển tiếp lệnh │ gas   │   └─▶ GaslessUSDC       │
- └──────────────────────┘                  │ tới contract game    │       │ ButlerAccount (agent AI)│
-                                           └──────────────────────┘       └─────────────────────────┘
+ │ Ví trong game        │   (miễn phí)     │ functions/api/relay  │ trả   │   ├─▶ FarmGame ──▶ nguồn lãi
+ │ hoặc MetaMask / Core │                  │ chỉ chuyển tiếp lệnh │ gas   │   ├─▶ FarmCoop ◀── Chainlink
+ └──────────────────────┘                  │ tới contract game    │       │   ├─▶ FarmPond (x·y=k)  │
+                                           └──────────────────────┘       │   └─▶ USDC, gAVAX test  │
+                                                                          │ ButlerAccount (agent AI)│
+                                                                          └─────────────────────────┘
 ```
 
-- **FarmGame**: Ruộng rau (cho vay 4%/năm), Vườn cây (khóa 7/30/90 ngày game, 6/9/14%), tưới, chuỗi ngày, gom và trộm điểm mùa. Mọi hàm dùng `_msgSender()`, nên chạy được cả khi gửi trực tiếp lẫn khi gửi qua fee manager.
+- **FarmGame**:
+  - Ruộng rau: cho vay 4%/năm.
+  - Vườn cây: khóa 7/30/90 ngày game với lãi 6/9/14%.
+  - Vòng chơi: tưới, chuỗi ngày, gom và trộm điểm mùa. Chỉ ví đang có cây mới được trộm, nên ví ảo tạo ra hàng loạt không cày được điểm qua fee manager.
+  - Nguồn lãi: tiền nhàn rỗi được gửi vào một `IYieldSource` (trên Fuji là `MockYieldSource`, trên mainnet là `AaveV3YieldSource`). `harvestYield()` chuyển phần lãi kiếm được vào quỹ thưởng.
+  - Mọi hàm dùng `_msgSender()`, nên chạy được cả khi gửi trực tiếp lẫn khi gửi qua fee manager.
+- **FarmCoop** (Hợp tác xã): gửi gAVAX làm thế chấp, vay USDC tối đa 60% giá trị theo giá **Chainlink AVAX/USD** trên Fuji, lãi vay 8%/năm. Khi nợ vượt 75% giá trị, bất kỳ ai cũng có thể trả nợ thay và nhận gAVAX kèm 10% phạt. Giá cũ hơn 2 ngày thì không cho vay.
+- **FarmPond** (Ao cá và Chợ phiên): pool x·y = k USDC/gAVAX, phí 0,3% chia cho người thả cá. `zapIn`/`zapOut` cho người chỉ có USDC. Impermanent loss trong game là thật.
 - **FarmForwarder**: `ERC2771Forwarder` của OpenZeppelin. Kiểm tra chữ ký, nonce (chống phát lại) và hạn của request.
-- **Fee manager** (`functions/api/relay.js`): Cloudflare Pages Function. Chỉ trả gas cho FarmGame và GaslessUSDC, `approve` chỉ được tới FarmGame, có trần gas và hạn request tối đa 1 giờ. Mô phỏng lệnh trước khi gửi để báo lỗi rõ ràng (ví dụ "Cây chưa chín").
+- **Fee manager** (`functions/api/relay.js`): Cloudflare Pages Function.
+  - Chỉ trả gas cho các hàm người chơi trên contract của game. `approve` chỉ được tới contract của game.
+  - Có trần gas, và hạn request tối đa 1 giờ.
+  - Mô phỏng lệnh trước khi gửi để báo lỗi rõ ràng (ví dụ "Cây chưa chín").
 - **Ví trong game**: khóa lưu trên trình duyệt, chỉ dùng cho testnet, sao lưu được. Ví chỉ ký dữ liệu, nên thay bằng ví nhúng như **Privy** về sau không phải đổi contract.
-- **ButlerAccount**: ví của quản gia AI. Agent chỉ có session key, bị giới hạn bởi rule, hạn mức ngày và kill switch.
+- **ButlerAccount**: ví của quản gia AI. Agent chỉ có session key, tự hết hạn sau 60 ngày, bị giới hạn bởi rule, hạn mức ngày và kill switch.
+
+Event của mọi contract (cho indexer và bot) xem [docs/EVENTS.md](docs/EVENTS.md).
 
 ## Đã deploy trên Fuji C-Chain
 
-Owner: ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
+Bản thứ hai, deploy ngày 17/10/2026. Owner là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
 
 | Contract | Địa chỉ |
 |---|---|
-| FarmGame | [`0xEa6351629bf8b11f1d6B303e29781cD99723234F`](https://testnet.snowtrace.io/address/0xEa6351629bf8b11f1d6B303e29781cD99723234F#code) |
-| GaslessUSDC | [`0xC76C1B20EC95389d8418AFE3f1600A1dE8BbC219`](https://testnet.snowtrace.io/address/0xC76C1B20EC95389d8418AFE3f1600A1dE8BbC219#code) |
-| FarmForwarder | [`0xda504CC0E7eA94d7aB97F0c0b03bBA1A1D8b0368`](https://testnet.snowtrace.io/address/0xda504CC0E7eA94d7aB97F0c0b03bBA1A1D8b0368#code) |
-| ButlerAccount | [`0x685F5a5840ACa1Fac6884c7E49998071B6A74c06`](https://testnet.snowtrace.io/address/0x685F5a5840ACa1Fac6884c7E49998071B6A74c06#code) |
+| FarmGame | [`0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e`](https://testnet.snowtrace.io/address/0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e#code) |
+| FarmCoop | [`0x850aE1CF266CF902E443a82f1d94C3d94753d946`](https://testnet.snowtrace.io/address/0x850aE1CF266CF902E443a82f1d94C3d94753d946#code) |
+| FarmPond | [`0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe`](https://testnet.snowtrace.io/address/0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe#code) |
+| GaslessUSDC | [`0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC`](https://testnet.snowtrace.io/address/0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC#code) |
+| GaslessAVAX (gAVAX) | [`0xc0c27243221de25a961D8B20274cbFc2196f8D4C`](https://testnet.snowtrace.io/address/0xc0c27243221de25a961D8B20274cbFc2196f8D4C#code) |
+| FarmForwarder | [`0x2B799E755a2BEd299286e177FDE9495b79401FFF`](https://testnet.snowtrace.io/address/0x2B799E755a2BEd299286e177FDE9495b79401FFF#code) |
+| ButlerAccount | [`0x90c10aD9a2A8f2Aea27B8EeAf83724937cF2353b`](https://testnet.snowtrace.io/address/0x90c10aD9a2A8f2Aea27B8EeAf83724937cF2353b#code) |
+| MockYieldSource | [`0xC47B70C7D75B7634f6B1bC9fA2eC993C7e6ff9C5`](https://testnet.snowtrace.io/address/0xC47B70C7D75B7634f6B1bC9fA2eC993C7e6ff9C5#code) |
+| DemoPriceFeed | [`0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079`](https://testnet.snowtrace.io/address/0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079#code) |
+| Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
 | Ví trả gas của fee manager | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC` |
 
-**Fee manager đang chạy** tại https://hanazono-b9s.pages.dev/api/relay (`ready: true`). Bài kiểm tra qua đúng endpoint này (`npm run smoke:gasless -- https://hanazono-b9s.pages.dev/api/relay`) với một ví 0 AVAX đã chạy trọn: faucet ([tx](https://testnet.snowtrace.io/tx/0x92f8ef1a64fd5a97bcbdf2de469feec61d90ea62521e1811c306f4528e90065c)), approve, plant ([tx](https://testnet.snowtrace.io/tx/0x7df7971ab56afbc29c88346205edd65345795aa41f8d18dcac36f43359787e46)), deposit ([tx](https://testnet.snowtrace.io/tx/0xb16866da364bf0984ed457ed88b53d7c127f582861c9056ee57da0ab2f534440)). Lệnh tới contract lạ bị từ chối (HTTP 403).
+Lúc deploy:
+- Quỹ thưởng có 50.000 USDC, trong đó 40.000 USDC gửi vào nguồn lãi.
+- Hợp tác xã có 50.000 USDC để cho vay.
+- Ao cá có 20.000 USDC và 2.012,5 gAVAX, theo giá Chainlink lúc đó là $9,94.
 
-Trước đó, chạy fee manager trên máy (`npm run smoke:gasless`): một ví mới với 0 AVAX đã nhận USDC ([0xac17e981…](https://testnet.snowtrace.io/tx/0xac17e98148f0e373512a24b1b084938a3eeb8bb8539f754a8418f3f0fff42d4d)), approve ([0x56f421cc…](https://testnet.snowtrace.io/tx/0x56f421cc77db2844d116b93fcf461286fb3d160840d21285ef3d67dfb1bf376f)), trồng 10 USDC ([0x0ac80ec8…](https://testnet.snowtrace.io/tx/0x0ac80ec871a2c73c996ff6295643dbe5f92038c39805f3fedad4348b4cf35ef3)) và gửi 50 USDC vào Ruộng rau ([0xda9d7781…](https://testnet.snowtrace.io/tx/0xda9d7781568931197056d9fd91371036017ec357e33411569378f2861c4c6cd3)), cuối cùng vẫn 0 AVAX. Quản gia AI (`npm run butler:demo`) gửi 50 USDC trong hạn mức ([0xb842766d…](https://testnet.snowtrace.io/tx/0xb842766d72f9ee7e63f95ca9a9ffabc9c4a76c4176ce4799d7acc36ee5357447)), còn các lệnh bị prompt injection đều revert.
+**Bằng chứng trên Fuji** (`npm run smoke:gasless`, một ví mới, từ đầu đến cuối 0 AVAX):
+- Ruộng rau và Vườn cây: faucet ([tx](https://testnet.snowtrace.io/tx/0xfa6ed605454da9113bb69501d565d4d1a436512779231ee9dfdec596abb8e63b)), trồng 10 USDC ([tx](https://testnet.snowtrace.io/tx/0x793a991893ed7c11426307e50ff3f49c2a1632665d711d8df1b7c3fb89378738)), gửi 50 USDC vào Ruộng rau ([tx](https://testnet.snowtrace.io/tx/0xf7e33e893d4bde810573974e09d189d0c7dddab004b824cb2a4bb4369b99396f)).
+- Hợp tác xã: gửi 5 gAVAX ([tx](https://testnet.snowtrace.io/tx/0x96cfc12b6f3000783a047b25e1e707ef9a41111420147684559ed837c68b27d1)), vay 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xadd1bad49e9e6dc4018ada6a67e4e694f4503cf1f53d573dcfdefe5697428653)).
+- Ao cá: thả 100 USDC ([tx](https://testnet.snowtrace.io/tx/0xb5132dd590db8f924a8fcd6ffb7e2926b3df90e1e254cf85cb7866315a39631c)).
+- Fee manager từ chối `approve` tới ví lạ (HTTP 403).
+- Quản gia AI (`npm run butler:demo`): gửi 50 USDC trong hạn mức ([tx](https://testnet.snowtrace.io/tx/0x991c7fd325894008a6fccd1e83d67600c6ecc1d0f5307d767c61f155800adc36)). Ba lệnh do prompt injection bị contract chặn: `CallNotAllowed`, `ArgumentNotAllowed`, `DailyCapExceeded`.
+
+Địa chỉ bản đầu (chỉ có FarmGame, USDC, forwarder, quản gia) vẫn còn trên Fuji, xem `git log` trước commit này.
 
 ## Cấu trúc
 
@@ -48,11 +78,15 @@ prototype/chain.js              Ví trong game / MetaMask, ký EIP-712, gửi qu
 prototype/chain-config.js       Địa chỉ contract (sinh bởi deploy-gasless.js)
 functions/api/relay.js          Fee manager (Cloudflare Pages Function)
 functions/_lib/relay-core.js    Chính sách + gửi giao dịch, dùng chung cho Pages và server local
-contracts/contracts/gasless/    FarmGame, FarmForwarder, GaslessUSDC
+contracts/contracts/gasless/    FarmGame, FarmCoop, FarmPond, FarmForwarder, GaslessUSDC, GaslessAVAX
+contracts/contracts/yield/      IYieldSource, MockYieldSource, AaveV3YieldSource
+contracts/contracts/oracle/     DemoPriceFeed (dàn cảnh hạn hán khi demo)
 contracts/contracts/cchain/     ButlerAccount (+ FarmVault, MockUSDC của bản L1 cũ)
 contracts/contracts/l1/         FarmLand (bản L1 cũ, xem docs/L1-ARCHIVE.md)
-contracts/test/                 gasless.test.js, farm.test.js, fork/fuji.fork.js
-docs/DEPLOY.md                  Deploy, fee manager, Cloudflare
+contracts/test/                 gasless, coop-pond, farm (L1), fork/fuji.fork.js
+docs/DEPLOY.md                  Deploy, fee manager, Cloudflare, demo hạn hán
+docs/EVENTS.md                  Event cho indexer và bot
+docs/TEAM-TASKS.md              Phân công kỹ thuật
 ```
 
 ## Chạy nhanh
@@ -60,12 +94,12 @@ docs/DEPLOY.md                  Deploy, fee manager, Cloudflare
 ```bash
 cd contracts
 npm install
-npm test            # 26 test
-npm run test:fork   # 3 test trên chính các contract đang chạy ở Fuji
+npm test            # 39 test
+npm run test:fork   # 6 test trên chính các contract đang chạy ở Fuji
 npm run local       # http://localhost:8790, chuỗi local + fee manager local
 ```
 
-Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** để mở. **Bản thiết kế** để xem kiến trúc. Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn là mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
+Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** để mở. **Bản thiết kế** để xem kiến trúc. Khi đã kết nối ví, mọi khu trừ Quản gia đều dùng contract thật. Contract quản gia được demo bằng `npm run butler:demo`.
 
 ## Các khu và cơ chế
 
@@ -76,9 +110,9 @@ Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** 
 | Vườn bác Tư | Tưới, chuỗi ngày, trộm điểm thưởng (không đụng tiền gốc) | On-chain (FarmGame) |
 | Cổng làng | Fee manager trả gas hộ | On-chain (FarmForwarder + /api/relay) |
 | Nhà quản gia AI | Session key, hạn mức ngày, whitelist, kill switch | On-chain (ButlerAccount, demo bằng script) |
-| Ao cá | LP, thời tiết theo oracle giá (impermanent loss) | Mô phỏng |
-| Hợp tác xã | Thế chấp AVAX, vay USDC, thanh lý | Mô phỏng |
-| Chợ phiên | AMM x·y = k, trượt giá | Mô phỏng |
+| Ao cá | LP x·y = k USDC/gAVAX, phí 0,3%, impermanent loss thật | On-chain (FarmPond) |
+| Hợp tác xã | Thế chấp gAVAX, vay USDC theo giá Chainlink, thanh lý | On-chain (FarmCoop) |
+| Chợ phiên | Swap trong Ao cá, trượt giá tối đa 1% | On-chain (FarmPond) |
 
 Không có token game, không có random drop: mọi thứ tất định.
 
@@ -86,7 +120,11 @@ Không có token game, không có random drop: mọi thứ tất định.
 
 1. **Why on-chain?** Tiền nằm trong contract và chỉ chủ ví điều khiển được bằng chữ ký. Quản gia AI bị giới hạn bằng contract, không phải bằng lời hứa.
 2. **Why Avalanche?** C-Chain finality dưới 2 giây và phí rất thấp, nên fee manager trả gas cho cả những thao tác nhỏ như tưới cây. Người chơi mới không cần biết gas là gì, và game lên mobile được.
-3. **Tiền từ đâu?** Yield từ protocol (bản MVP dùng quỹ thưởng tài trợ, bước tiếp theo nối Aave/Benqi), phí LP và quỹ tài trợ mùa vụ.
+3. **Tiền từ đâu?**
+   - Lãi từ thị trường cho vay: FarmGame gửi tiền nhàn rỗi vào `IYieldSource`. Trên Fuji là bản mock, trên mainnet là adapter Aave v3 đã viết sẵn và có test.
+   - Phí 0,3% của Ao cá trả cho người thả cá.
+   - Lãi vay 8% ở Hợp tác xã.
+   - Quỹ tài trợ mùa vụ.
 
 ## Giới hạn pháp lý tại Việt Nam
 
@@ -113,8 +151,10 @@ Không có token game, không có random drop: mọi thứ tất định.
 - [x] Fee manager trả gas hộ (ERC-2771 + Cloudflare Pages Function), ví trong game không cần cài
 - [x] ButlerAccount: agent AI có guardrail, chạy thật trên Fuji
 - [x] Verify source trên Snowtrace, test fork trên contract thật
+- [x] Hợp tác xã (Chainlink, thanh lý) và Ao cá (x·y = k) trên contract
+- [x] Nguồn lãi `IYieldSource`: mock trên Fuji, adapter Aave v3 cho mainnet
 - [ ] Ví nhúng Privy (App ID đã có), giữ nguyên contract và fee manager
-- [ ] Yield thật từ Aave/Benqi, đưa Hợp tác xã và Ao cá lên contract
+- [ ] Bot thanh lý, bot cân giá Ao cá theo Chainlink, indexer cho bảng xếp hạng
 - [ ] Giới hạn lượt trả gas theo người chơi (Cloudflare KV), pixel art thật
 
 ## Lịch sử: bản Game L1

@@ -32,6 +32,7 @@ describe("Fuji gasless deployment (fork)", function () {
     expect(await game.dayLength()).to.equal(BigInt(d.dayLength));
     expect(await game.rewardReserve()).to.be.gte(U(49_000));
     expect(await butler.owner()).to.equal(d.owner);
+    expect(await butler.agentValidUntil()).to.be.gt(BigInt(Math.floor(Date.now() / 1000)));
   });
 
   it("plant and harvest on the deployed game", async () => {
@@ -43,6 +44,44 @@ describe("Fuji gasless deployment (fork)", function () {
     const before = await usdc.balanceOf(player);
     await game.connect(player).harvest(ids[ids.length - 1]);
     expect((await usdc.balanceOf(player)) - before).to.be.gt(U(100));
+  });
+
+  it("Hợp tác xã prices gAVAX with the live Chainlink AVAX/USD feed and lends against it", async () => {
+    const coop = await ethers.getContractAt("FarmCoop", d.coop);
+    const gavax = await ethers.getContractAt("GaslessAVAX", d.gavax);
+    expect(await coop.oracle()).to.equal(d.chainlinkAvaxUsd);
+    expect(await coop.owner()).to.equal(d.owner);
+    const price = await coop.price();
+    expect(price).to.be.gt(ethers.parseUnits("1", 8));
+    await gavax.connect(player).faucet();
+    await gavax.connect(player).approve(coop, ethers.MaxUint256);
+    await coop.connect(player).depositCollateral(ethers.parseUnits("10", 18));
+    const [, , value, maxBorrow] = await coop.positionOf(player);
+    expect(value).to.equal((ethers.parseUnits("10", 18) * price) / 10n ** 20n);
+    await coop.connect(player).borrow(maxBorrow);
+    await expect(coop.connect(player).borrow(1)).to.be.revertedWithCustomError(coop, "ExceedsBorrowLimit");
+  });
+
+  it("Ao cá is seeded near the Chainlink price and takes a USDC-only deposit", async () => {
+    const pond = await ethers.getContractAt("FarmPond", d.pond);
+    const coop = await ethers.getContractAt("FarmCoop", d.coop);
+    const chainlink = await coop.price();
+    const pool = await pond.poolPrice();
+    expect(pool).to.be.closeTo(chainlink, chainlink / 5n); // within 20%: players and keepers move it
+    await usdc.connect(player).faucet();
+    await usdc.connect(player).approve(pond, ethers.MaxUint256);
+    await pond.connect(player).zapIn(U(100), 1);
+    const [, , , value] = await pond.positionOf(player);
+    expect(value).to.be.closeTo(U(100), U(1));
+  });
+
+  it("FarmGame parks idle USDC in the yield source and harvests it into the reward pool", async () => {
+    expect(await game.yieldSource()).to.equal(d.yieldSource);
+    expect(await game.invested()).to.be.gt(0n);
+    await time.increase(30 * Number(d.dayLength));
+    const before = await game.rewardReserve();
+    await game.harvestYield();
+    expect(await game.rewardReserve()).to.be.gt(before);
   });
 
   it("Quản gia: owner can revoke the agent at once", async () => {

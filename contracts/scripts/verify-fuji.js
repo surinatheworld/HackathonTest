@@ -21,6 +21,13 @@ async function main() {
   await verify("GaslessUSDC", d.usdc, [d.forwarder]);
   await verify("FarmGame", d.game, [d.forwarder, d.usdc, d.dayLength]);
   await verify("ButlerAccount", d.butler, [d.deployer, d.dayLength]);
+  if (d.coop) {
+    await verify("GaslessAVAX", d.gavax, [d.forwarder]);
+    await verify("FarmCoop", d.coop, [d.forwarder, d.usdc, d.gavax, d.chainlinkAvaxUsd, d.maxPriceAge, d.dayLength]);
+    await verify("FarmPond", d.pond, [d.forwarder, d.usdc, d.gavax]);
+    await verify("MockYieldSource", d.yieldSource, [d.usdc, d.game, 500, d.dayLength]);
+    await verify("DemoPriceFeed", d.demoFeed, [d.demoFeedSeed]);
+  }
   console.log(`Xem: https://testnet.snowtrace.io/address/${d.game}#code`);
 }
 

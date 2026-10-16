@@ -30,6 +30,25 @@
       "function cropsOf(address) view returns (uint256[] ids, tuple(address owner, uint8 tier, uint8 status, uint64 plantedAt, uint64 lastWateredDay, uint256 amount, uint256 payout)[] list)",
       "function farmers(address) view returns (uint256 points, uint256 ripePoints, uint32 streak, uint64 lastWaterDay, uint64 lastStealDay, bool guarded, uint16 activeCrops)",
     ],
+    coop: [
+      "function depositCollateral(uint256)",
+      "function withdrawCollateral(uint256)",
+      "function borrow(uint256)",
+      "function repay(address user, uint256 amount)",
+      "function liquidate(address user)",
+      "function price() view returns (uint256)",
+      "function positionOf(address) view returns (uint256 collateral, uint256 debt, uint256 value, uint256 maxBorrow, uint256 healthBps)",
+    ],
+    pond: [
+      "function zapIn(uint256 usdcAmount, uint256 minShares)",
+      "function zapOut(uint256 shares, uint256 minUsdc)",
+      "function swap(bool usdcIn, uint256 amountIn, uint256 minOut)",
+      "function quote(bool usdcIn, uint256 amountIn) view returns (uint256)",
+      "function poolPrice() view returns (uint256)",
+      "function reserveUsdc() view returns (uint256)",
+      "function reserveAvax() view returns (uint256)",
+      "function positionOf(address) view returns (uint256 shares, uint256 usdcPart, uint256 avaxPart, uint256 valueUsdc)",
+    ],
     forwarder: ["function nonces(address) view returns (uint256)"],
   };
   const STATUS = ["None", "Growing", "Harvested", "Uprooted"];
@@ -44,10 +63,13 @@
       { name: "data", type: "bytes" },
     ],
   };
-  const GAS = { plant: 300_000, harvest: 250_000, uproot: 200_000, water: 120_000, small: 120_000, lend: 250_000, usdc: 120_000 };
+  const GAS = { plant: 300_000, harvest: 250_000, uproot: 200_000, water: 120_000, small: 120_000, lend: 250_000, usdc: 120_000, coop: 250_000, pond: 300_000 };
+  const SLIPPAGE_BPS = 100n; // 1% for pond trades
   const KEY = "farm-wallet-v1";
   const U = (v) => E.parseUnits(String(v), 6);
   const toNum = (v) => Number(E.formatUnits(v, 6));
+  const A = (v) => E.parseUnits(String(v), 18);
+  const toAvax = (v) => Number(E.formatUnits(v, 18));
 
   const CH = { available: false, live: false, account: null, data: null, busy: null, reason: "", cfg, STATUS, hasL1: true, walletKind: null, gasless: null };
   const listeners = [];
@@ -68,6 +90,14 @@
   const fwdR = new E.Contract(c.forwarder, ABI.forwarder, rp);
   const usdcI = new E.Interface(ABI.usdc);
   const gameI = new E.Interface(ABI.game);
+  // Hợp tác xã and Ao cá exist from the second Fuji deploy on; older configs simply leave them out.
+  const coopR = c.coop ? new E.Contract(c.coop, ABI.coop, rp) : null;
+  const pondR = c.pond ? new E.Contract(c.pond, ABI.pond, rp) : null;
+  const avaxR = c.gavax ? new E.Contract(c.gavax, ABI.usdc, rp) : null;
+  const coopI = new E.Interface(ABI.coop);
+  const pondI = new E.Interface(ABI.pond);
+  CH.hasCoop = !!(coopR && avaxR);
+  CH.hasPond = !!(pondR && avaxR);
   const domain = { name: "NongTraiDeFi", version: "1", chainId: c.chainId, verifyingContract: c.forwarder };
   const relayUrl = cfg.relayUrl || "/api/relay";
   let signer = null;
@@ -174,8 +204,35 @@
         };
       }),
     };
+    const [coop, pond, gavax] = await Promise.all([readCoop(a), readPond(a), avaxR ? avaxR.balanceOf(a) : 0n]);
+    Object.assign(CH.data, { coop, pond, gavax: toAvax(gavax) });
     emit();
   };
+
+  async function readCoop(a) {
+    if (!CH.hasCoop) return null;
+    try {
+      const [p, price] = await Promise.all([coopR.positionOf(a), coopR.price()]);
+      return {
+        collateral: toAvax(p.collateral), debt: toNum(p.debt), value: toNum(p.value), maxBorrow: toNum(p.maxBorrow),
+        // healthBps is MaxUint256 without debt; 1.0 = exactly at the liquidation line.
+        health: p.debt === 0n ? Infinity : Number(p.healthBps) / 10_000,
+        price: Number(E.formatUnits(price, 8)), priceOk: true,
+      };
+    } catch (e) {
+      // Chainlink is stale or unreachable: positionOf needs a price, so report that instead.
+      return { collateral: 0, debt: 0, value: 0, maxBorrow: 0, health: Infinity, price: 0, priceOk: false, error: CH.errMsg(e) };
+    }
+  }
+
+  async function readPond(a) {
+    if (!CH.hasPond) return null;
+    const [p, price, ru, ra] = await Promise.all([pondR.positionOf(a), pondR.poolPrice(), pondR.reserveUsdc(), pondR.reserveAvax()]);
+    return {
+      shares: p.shares, usdcPart: toNum(p.usdcPart), avaxPart: toAvax(p.avaxPart), value: toNum(p.valueUsdc),
+      price: Number(E.formatUnits(price, 8)), reserveUsdc: toNum(ru), reserveAvax: toAvax(ra),
+    };
+  }
 
   // ---------- sending ----------
   let queue = Promise.resolve();
@@ -233,11 +290,12 @@
     }
   }
 
-  async function ensureAllowance(amount) {
-    const have = await usdcR.allowance(CH.account, c.game);
+  async function ensureAllowance(amount, spender = c.game, token = usdcR, label = "Cho phép FarmGame dùng USDC") {
+    const have = await token.allowance(CH.account, spender);
     if (have >= amount) return;
-    await run("Cho phép FarmGame dùng USDC", c.usdc, usdcI, "approve", [c.game, E.MaxUint256], GAS.usdc);
+    await run(label, token.target, usdcI, "approve", [spender, E.MaxUint256], GAS.usdc);
   }
+  const minus = (v) => (v * (10_000n - SLIPPAGE_BPS)) / 10_000n;
 
   CH.faucet = () => run("Nhận 1.000 USDC test", c.usdc, usdcI, "faucet", [], GAS.usdc);
   CH.lendDeposit = async (v) => { await ensureAllowance(U(v)); return run("Gieo hạt vào ruộng rau", c.game, gameI, "deposit", [U(v)], GAS.lend); };
@@ -250,11 +308,51 @@
   CH.collect = () => run("Gom điểm mùa", c.game, gameI, "collect", [], GAS.small);
   CH.steal = (addr) => run("Hái trộm vườn hàng xóm", c.game, gameI, "steal", [E.getAddress(addr)], GAS.small);
   CH.setGuard = (b) => run(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", c.game, gameI, "setGuard", [b], GAS.small);
+
+  // ---------- Hợp tác xã ----------
+  CH.avaxFaucet = () => run("Nhận 20 gAVAX test", c.gavax, usdcI, "faucet", [], GAS.usdc);
+  CH.coopDeposit = async (v) => {
+    await ensureAllowance(A(v), c.coop, avaxR, "Cho phép Hợp tác xã dùng gAVAX");
+    return run("Gửi gAVAX vào kho thóc", c.coop, coopI, "depositCollateral", [A(v)], GAS.coop);
+  };
+  CH.coopWithdraw = (v) => run("Rút gAVAX khỏi kho thóc", c.coop, coopI, "withdrawCollateral", [A(v)], GAS.coop);
+  CH.coopBorrow = (v) => run("Vay phân bón", c.coop, coopI, "borrow", [U(v)], GAS.coop);
+  CH.coopRepay = async (v) => {
+    await ensureAllowance(U(v), c.coop, usdcR, "Cho phép Hợp tác xã nhận USDC trả nợ");
+    return run("Trả nợ Hợp tác xã", c.coop, coopI, "repay", [CH.account, U(v)], GAS.coop);
+  };
+  /** Repay someone's unhealthy debt and take their gAVAX plus 10%. */
+  CH.coopLiquidate = async (user, debt) => {
+    await ensureAllowance(U(debt), c.coop, usdcR, "Cho phép Hợp tác xã nhận USDC");
+    return run("Thanh lý kho thóc", c.coop, coopI, "liquidate", [E.getAddress(user)], GAS.coop);
+  };
+
+  // ---------- Ao cá ----------
+  CH.pondAdd = async (v) => {
+    await ensureAllowance(U(v), c.pond, usdcR, "Cho phép Ao cá dùng USDC");
+    return run("Thả cá vào ao", c.pond, pondI, "zapIn", [U(v), 1], GAS.pond);
+  };
+  /** Take out a fraction (0..1] of the position, paid out in USDC. */
+  CH.pondOut = async (fraction = 1) => {
+    const p = await pondR.positionOf(CH.account);
+    if (p.shares === 0n) throw new Error("Ao đang trống.");
+    const shares = fraction >= 1 ? p.shares : (p.shares * BigInt(Math.round(fraction * 10_000))) / 10_000n;
+    const sold = await pondR.quote(false, (p.avaxPart * shares) / p.shares);
+    const min = minus((p.usdcPart * shares) / p.shares + sold);
+    return run("Vớt cá", c.pond, pondI, "zapOut", [shares, min], GAS.pond);
+  };
+  CH.pondSwap = async (usdcIn, v) => {
+    const amount = usdcIn ? U(v) : A(v);
+    await ensureAllowance(amount, c.pond, usdcIn ? usdcR : avaxR, usdcIn ? "Cho phép Ao cá dùng USDC" : "Cho phép Ao cá dùng gAVAX");
+    const out = await pondR.quote(usdcIn, amount);
+    return run(usdcIn ? "Mua gAVAX ở chợ" : "Bán gAVAX ở chợ", c.pond, pondI, "swap", [usdcIn, amount, minus(out)], GAS.pond);
+  };
+
   CH.explorerTx = (hash) => (c.explorer ? `${c.explorer.replace(/\/$/, "")}/tx/${hash}` : "");
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
     if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối trong ví.";
-    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test." };
+    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test." };
     for (const [k, v] of Object.entries(map)) if (m.includes(k)) return v;
     return m.length > 180 ? m.slice(0, 180) + "…" : m;
   };

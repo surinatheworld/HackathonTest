@@ -1,7 +1,7 @@
 {
   "name": "nong-trai-defi-contracts",
   "version": "1.0.0",
-  "description": "Nông Trại DeFi: FarmVault (C-Chain), FarmLand (Game L1), ButlerAccount, ICM",
+  "description": "Nông Trại DeFi on Avalanche Fuji: FarmGame, FarmCoop, FarmPond, ButlerAccount, gasless via ERC-2771",
   "scripts": {
     "test": "hardhat test",
     "compile": "hardhat compile",
@@ -22,7 +22,8 @@
     "handover:fuji": "hardhat run scripts/handover.js --network fuji",
     "handover:l1": "hardhat run scripts/handover.js --network farml1",
     "deploy:gasless": "hardhat run scripts/deploy-gasless.js --network fuji",
-    "smoke:gasless": "node scripts/gasless-smoke.js"
+    "smoke:gasless": "node scripts/gasless-smoke.js",
+    "drought": "node scripts/drought.js"
   },
   "license": "MIT",
   "type": "commonjs",

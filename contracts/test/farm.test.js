@@ -238,7 +238,7 @@ describe("Nhà quản gia AI: guardrails", () => {
     await acct.connect(alice).setRule(token, sel(token, "approve"), true, 0, await vault.getAddress());
     await acct.connect(alice).setRule(vault, sel(vault, "deposit"), true, 1, ethers.ZeroAddress);
     await acct.connect(alice).setRule(vault, sel(vault, "claim"), true, 0, ethers.ZeroAddress);
-    await acct.connect(alice).setAgent(agent, usdc(200));
+    await acct.connect(alice).setAgent(agent, usdc(200), (await time.latest()) + 30 * 86400);
     const now = await time.latest();
     await time.increaseTo(Math.ceil((now + 1) / DAY) * DAY + 1); // start of a fresh game day
     return { ...ctx, acct };
