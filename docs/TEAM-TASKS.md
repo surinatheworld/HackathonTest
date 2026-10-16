@@ -19,15 +19,23 @@
 
 ## Blockchain (bạn)
 
-| Ưu tiên | Việc | Xong khi |
+| Ưu tiên | Việc | Trạng thái |
 |---|---|---|
-| P0 | Đưa **Hợp tác xã** và **Ao cá** lên contract (hiện đang mô phỏng trên giao diện), kèm test | Panel hiện trạng thái đọc từ chain. Test qua |
-| P0 | Rà event của `FarmGame`: thêm event còn thiếu (trồng, thu hoạch, nhổ, tưới, trộm, gửi/rút/nhận lãi), viết `docs/EVENTS.md` | Backend index được mọi hành động |
-| P0 | Rà bảo mật: chạy Slither, viết test biên (rút cạn `rewardReserve`, trộm liên tục, vượt 12 cây, replay qua forwarder) | Không còn cảnh báo mức High. Có test cho từng trường hợp |
-| P0 | Deploy lại, verify, cập nhật `chain-config.js` và `relay-config.js`, chạy `test:fork` và `smoke:gasless` | Mọi địa chỉ trên Pages trỏ đúng bản mới |
-| P1 | Yield thật: interface `IYieldSource`, bản mock và adapter Aave v3 trên Fuji nếu có pool test | Ruộng rau trả lãi từ nguồn ngoài. Có test fork |
-| P1 | Quản gia: thêm rule (hết hạn session key, giới hạn theo hàm), hỗ trợ Backend gọi `ButlerAccount` | `butler:demo` vẫn chặn đủ 3 lệnh injection |
-| P2 | Mùa vụ (reset điểm theo mùa), NFT huy hiệu cho top bảng xếp hạng | Có thể bỏ nếu thiếu thời gian |
+| P0 | Đưa **Hợp tác xã** (FarmCoop, giá Chainlink) và **Ao cá** (FarmPond, x·y=k) lên contract, kèm test | ✅ 17/10, đã nối vào game |
+| P0 | Rà event, viết `docs/EVENTS.md` | ✅ `CropClosed` có thêm `owner` và `points` |
+| P0 | Test biên bảo mật (rút cạn quỹ thưởng, trộm, 12 cây, replay, giá cũ, trượt giá) | ✅ 39 test. **Còn chạy Slither**: cần Python, xem `docs/DEPLOY.md` mục 2c |
+| P0 | Deploy lại, verify, cập nhật config, chạy `test:fork` và `smoke:gasless` | ✅ 6 test fork qua, smoke qua Pages qua |
+| P1 | Nguồn lãi: `IYieldSource`, `MockYieldSource` trên Fuji, `AaveV3YieldSource` cho mainnet | ✅ Aave v3 không có pool trên Fuji nên adapter được test bằng pool giả |
+| P1 | Quản gia: session key tự hết hạn | ✅ Hạn 60 ngày (đến 15/12/2026) |
+| P1 | Demo hạn hán: `npm run drought -- 6`, rồi `npm run drought -- liquidate` | ✅ Owner phải `setOracle` trước, xem `docs/DEPLOY.md` mục 2b |
+| P2 | Mùa vụ (reset điểm theo mùa), NFT huy hiệu cho top bảng xếp hạng | Chưa làm |
+
+**Đã sẵn cho Backend**:
+- Bot thanh lý: `scripts/drought.js` (hàm `liquidateAll`) là bản mẫu, đã đọc log qua Routescan.
+- Bot cân giá Ao cá: so `FarmPond.poolPrice()` với `FarmCoop.price()`. Mô tả trong `docs/EVENTS.md`.
+- Fee manager đã có whitelist cho FarmCoop, FarmPond và gAVAX.
+
+**Đã sẵn cho Gameplay**: `CH.coopDeposit/coopWithdraw/coopBorrow/coopRepay/coopLiquidate`, `CH.pondAdd/pondOut/pondSwap`, `CH.avaxFaucet`, cùng dữ liệu `CH.data.coop`, `CH.data.pond`, `CH.data.gavax`.
 
 ## Gameplay (Người 2)
 
