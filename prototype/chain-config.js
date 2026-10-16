@@ -13,5 +13,13 @@ window.FARM_CONFIG = {
     "vault": "0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D",
     "butler": "0xF92c04C7813cdD742Dd1a73B791658edC88EacA1"
   },
-  "l1": null
+  "l1": {
+    "chainId": 384487,
+    "name": "Farm L1 v2",
+    "rpc": "https://nodes-prod.43.207.73.245.sslip.io/ext/bc/2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE/rpc",
+    "explorer": "",
+    "currency": "FARM",
+    "blockchainID": "0xbd891c08df8e711bc6e89bf13581c1479d1de765b22e6302f47746fd6e58cb44",
+    "land": "0xD268bB5591ebFAd64c43dDF3D634376bD4AA94A5"
+  }
 };

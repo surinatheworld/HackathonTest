@@ -6,7 +6,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình t
 
 > Trạng thái: contract đã viết và có test (11/11 pass), chạy end-to-end offline bằng `npm run local`. Deploy lên Fuji + Game L1 làm theo [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Đã deploy trên Fuji C-Chain
+## Đã deploy
 
 Owner của mọi contract là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 58 giây. Source đã được verify trên Snowtrace.
 
@@ -15,9 +15,11 @@ Owner của mọi contract là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa
 | FarmVault | [`0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D`](https://testnet.snowtrace.io/address/0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D#code) |
 | MockUSDC | [`0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b`](https://testnet.snowtrace.io/address/0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b#code) |
 | ButlerAccount | [`0xF92c04C7813cdD742Dd1a73B791658edC88EacA1`](https://testnet.snowtrace.io/address/0xF92c04C7813cdD742Dd1a73B791658edC88EacA1#code) |
-| FarmLand (Farm L1) | chưa deploy |
+| FarmLand (Farm L1 v2, chain `384487`) | `0xD268bB5591ebFAd64c43dDF3D634376bD4AA94A5` |
 
-FarmVault này được build từ commit `7484ec8`, khi `requiredGasLimit` mặc định còn là 400k. Bước 4 của deploy.html sẽ nâng giá trị này lên 1.000.000 lúc nối với L1.
+Farm L1 v2: blockchainID `2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE`, RPC `https://nodes-prod.43.207.73.245.sslip.io/ext/bc/2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE/rpc`. Node và relayer managed của Builder Console hết hạn sau khoảng 3 ngày.
+
+FarmVault và FarmLand đã được ghép cặp với nhau, `requiredGasLimit` 1.000.000 ở cả hai phía. Quản gia: agent `0x6fC6866A2bcD264ABd80640D72659d0336A1550c`, hạn mức 200 USDC/ngày. `npm run butler:demo` đã chạy trên Fuji: agent gửi 50 USDC ([tx](https://testnet.snowtrace.io/tx/0xa8912a591bf355fd8880c850ccbb9e30293e1d28247d1ea74206675c3ad80bd2)), còn các lệnh bị prompt injection đều revert.
 
 ## Cấu trúc
 
