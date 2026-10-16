@@ -17,6 +17,27 @@ Kiến trúc:
 
 TeleporterMessenger có cùng địa chỉ `0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf` trên mọi chain. Fuji đã có sẵn; L1 của mình phải deploy thêm. Relayer là dịch vụ off-chain: nếu không chạy relayer, thư được gửi đi nhưng không bao giờ tới nơi.
 
+## Cách nhanh nhất: deploy bằng ví của bạn trên web
+
+Mở **https://hanazono-b9s.pages.dev/deploy.html**, kết nối Core/MetaMask bằng ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`, rồi bấm lần lượt:
+
+1. **Deploy lên Fuji**: MockUSDC, FarmVault (nạp 50.000 USDC test vào quỹ thưởng), ButlerAccount và 3 rule. Khoảng 9 lần ký, tốn 0,1–0,2 AVAX.
+2. **Farm L1**: điền RPC URL và Chain ID từ My L1 Dashboard, bấm **Kiểm tra L1** (kiểm tra RPC, chainId và TeleporterMessenger), rồi **Deploy FarmLand**.
+3. **Nối hai chain**: 2 lần ký `setRemote`.
+
+Ví bạn là deployer và owner của mọi contract. Trang không bao giờ hỏi private key. Tiến trình được lưu trong trình duyệt: đóng trang giữa chừng thì mở lại và bấm tiếp, các bước đã xong sẽ tự bỏ qua. Mới xong Fuji thì game đã chơi on-chain được Ruộng rau trên trình duyệt đó.
+
+Để mọi người cùng chơi, commit cấu hình. Người trong nhóm có repo chạy:
+
+```bash
+cd contracts
+npm run sync-config -- 0x54A2276F134d3Cfaa7572BC326092fABa6352888 --l1-rpc <RPC URL của Farm L1>
+```
+
+Script tìm contract mà ví đã tạo trên Fuji, đọc địa chỉ FarmLand từ FarmVault, rồi ghi `prototype/chain-config.js`. Commit và push file đó, Cloudflare Pages sẽ cập nhật sau khoảng 1 phút. Cách khác là sao chép nội dung ở bước 5 của trang deploy.
+
+Các bước dưới đây là cách deploy bằng script (ví deploy riêng trong `.env`), dùng khi không deploy trên web.
+
 ## 0. Chạy thử offline trước (không cần testnet)
 
 ```bash

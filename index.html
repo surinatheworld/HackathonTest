@@ -516,9 +516,9 @@ const liveTag='<span class="pill g">On-chain</span>';
 const LIVE={
   home:{
     stats:()=>{const d=CH.data;if(!d)return '<p class="note">Đang đọc dữ liệu từ chain…</p>';
-      return kv([['Ví',short(CH.account)],['USDC trên Fuji',usd(d.usdc)],['AVAX trên Fuji',nf(d.avax,3)],['Gas trên '+esc(CH.cfg.l1.name),nf(d.l1gas,3)+' '+esc(CH.cfg.l1.currency)],
+      return kv([['Ví',short(CH.account)],['USDC trên Fuji',usd(d.usdc)],['AVAX trên Fuji',nf(d.avax,3)],...(CH.hasL1?[['Gas trên '+esc(CH.cfg.l1.name),nf(d.l1gas,3)+' '+esc(CH.cfg.l1.currency)]]:[['Game L1','Chưa nối']]),
         ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing'||c.status==='Pending').length+' cây đang trồng'],['Điểm mùa (L1)',nf(d.farmer.points,0)]])+
-        `<p class="note">${liveTag} Ruộng rau, Vườn cây và Vườn hàng xóm dùng contract thật trên Fuji và ${esc(CH.cfg.l1.name)}. Ao cá, Chợ phiên, Hợp tác xã và Quản gia vẫn chạy mô phỏng. 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
+        (CH.hasL1?'':'<p class="note warn">Mới deploy Fuji: Ruộng rau đã on-chain. Vườn cây và Vườn hàng xóm cần Game L1 (deploy.html, bước 3–4).</p>')+`<p class="note">${liveTag} Ruộng rau, Vườn cây và Vườn hàng xóm dùng contract thật trên Fuji và ${esc(CH.hasL1?CH.cfg.l1.name:'Game L1')}. Ao cá, Chợ phiên, Hợp tác xã và Quản gia vẫn chạy mô phỏng. 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
     actions:()=>PANELS.home.actions()
   },
   lend:{
@@ -555,7 +555,8 @@ const LIVE={
       <p class="note">${liveTag} Tưới cây mỗi ngày để có điểm chín. Điểm chín chưa gom có thể bị hàng xóm hái 40%, mỗi người 1 lần/ngày. Chỉ đụng điểm thưởng, không bao giờ đụng tiền.</p>`
   }
 };
-const panelFor=id=>(CH.live&&CH.data&&LIVE[id])||PANELS[id];
+const NEEDS_L1={orchard:1,neighbor:1};
+const panelFor=id=>(CH.live&&CH.data&&LIVE[id]&&(CH.hasL1||!NEEDS_L1[id])&&LIVE[id])||PANELS[id];
 const cAct=(p,ok)=>p.then(()=>{if(ok)toast(ok)}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
 Object.assign(ACT,{
   'c-faucet'(){cAct(CH.faucet(),'Đã nhận 1.000 USDC test trên Fuji.')},
@@ -582,7 +583,7 @@ CH.on?.(()=>{
     st.locks=[];st.butler.lastMove=-9;
     document.querySelectorAll('[data-speed]').forEach(b=>{b.disabled=true;b.title='On-chain: 1 ngày game = '+CH.cfg.dayLength+' giây'});
     const w=$('#b-wallet');w.textContent=short(CH.account);w.classList.remove('primary');
-    icm('gate','Game L1','Đã kết nối ví '+short(CH.account)+' với Fuji C-Chain và '+CH.cfg.l1.name);
+    icm('gate','Game L1','Đã kết nối ví '+short(CH.account)+' với '+CH.cfg.cchain.name+(CH.hasL1?' và '+CH.cfg.l1.name:''));
     toast('Đã kết nối. Ruộng rau, Vườn cây và Vườn hàng xóm giờ chạy on-chain.');
     if(current)openZone(current);
   }

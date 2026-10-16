@@ -1,7 +1,8 @@
 // Wallet + contract layer for Nông Trại DeFi. Exposes window.FarmChain.
 // Needs ethers v6 (UMD) and window.FARM_CONFIG from chain-config.js.
 (() => {
-  const cfg = window.FARM_CONFIG;
+  // Committed config first; otherwise the one deploy.html saved in this browser.
+  const cfg = window.FARM_CONFIG || (() => { try { return JSON.parse(localStorage.getItem("farm-config")); } catch { return null; } })();
   const E = window.ethers;
   const ABI = {
     usdc: [
@@ -36,7 +37,7 @@
   const U = (v) => E.parseUnits(String(v), 6);
   const toNum = (v) => Number(E.formatUnits(v, 6));
 
-  const CH = { available: false, live: false, account: null, data: null, busy: null, reason: "", cfg, STATUS };
+  const CH = { available: false, live: false, account: null, data: null, busy: null, reason: "", cfg, STATUS, hasL1: !!(cfg && cfg.l1) };
   const listeners = [];
   CH.on = (fn) => listeners.push(fn);
   const emit = () => listeners.forEach((f) => { try { f(CH); } catch (e) { console.error(e); } });
@@ -49,10 +50,10 @@
   if (!cfg || !E) return;
 
   const rc = new E.JsonRpcProvider(cfg.cchain.rpc, cfg.cchain.chainId, { staticNetwork: true });
-  const rl = new E.JsonRpcProvider(cfg.l1.rpc, cfg.l1.chainId, { staticNetwork: true });
+  const rl = CH.hasL1 ? new E.JsonRpcProvider(cfg.l1.rpc, cfg.l1.chainId, { staticNetwork: true }) : null;
   const usdcR = new E.Contract(cfg.cchain.usdc, ABI.usdc, rc);
   const vaultR = new E.Contract(cfg.cchain.vault, ABI.vault, rc);
-  const landR = new E.Contract(cfg.l1.land, ABI.land, rl);
+  const landR = CH.hasL1 ? new E.Contract(cfg.l1.land, ABI.land, rl) : null;
 
   async function switchTo(net) {
     const chainId = "0x" + net.chainId.toString(16);
@@ -74,6 +75,7 @@
   }
 
   async function signer(netKey) {
+    if (!cfg[netKey]) throw new Error("Chưa nối Game L1. Hoàn tất bước 3 và 4 trong deploy.html.");
     await switchTo(cfg[netKey]);
     return new E.BrowserProvider(window.ethereum).getSigner();
   }
@@ -135,10 +137,10 @@
       vaultR.lends(a),
       vaultR.pendingYield(a),
       vaultR.rewardReserve(),
-      landR.cropsOf(a),
-      landR.farmers(a),
-      landR.today(),
-      rl.getBalance(a),
+      landR ? landR.cropsOf(a) : { ids: [], list: [] },
+      landR ? landR.farmers(a) : { points: 0n, ripePoints: 0n, streak: 0n, guarded: false },
+      landR ? landR.today() : 0n,
+      rl ? rl.getBalance(a) : 0n,
     ]);
     CH.data = {
       usdc: toNum(usdc),

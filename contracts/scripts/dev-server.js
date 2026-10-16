@@ -100,7 +100,7 @@ async function main() {
       // Serve only the game: index.html and prototype/. Never the rest of the repo (contracts/.env).
       const rel = url.pathname === "/" ? "index.html" : path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "");
       const file = path.join(WEB, rel);
-      const allowed = rel === "index.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
+      const allowed = rel === "index.html" || rel === "deploy.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
       if (!allowed || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
         res.writeHead(404);
         res.end("Not found");

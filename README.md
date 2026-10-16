@@ -30,6 +30,8 @@ npm test          # 11 test
 npm run local     # mở http://localhost:8790/?wallet=dev
 ```
 
+Deploy contract bằng ví của bạn: **https://hanazono-b9s.pages.dev/deploy.html** (xem [docs/DEPLOY.md](docs/DEPLOY.md)).
+
 Chơi online: **https://hanazono-b9s.pages.dev/** (Cloudflare Pages, tự cập nhật khi push lên `main`). Chỉ xem giao diện mô phỏng offline: mở thẳng `index.html`.
 
 - Di chuyển: `WASD` / phím mũi tên, hoặc chạm vào một khu trên bản đồ để nhân vật tự đi tới.

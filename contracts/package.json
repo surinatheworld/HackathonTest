@@ -13,7 +13,9 @@
     "deploy": "npm run deploy:fuji && npm run deploy:l1 && npm run link:fuji && npm run link:l1",
     "smoke": "node scripts/smoke.js",
     "butler:demo": "hardhat run scripts/butler-demo.js --network fuji",
-    "local": "node scripts/dev-server.js"
+    "local": "node scripts/dev-server.js",
+    "export-web": "hardhat compile && node scripts/export-web.js",
+    "sync-config": "node scripts/sync-config.js"
   },
   "license": "MIT",
   "type": "commonjs",
