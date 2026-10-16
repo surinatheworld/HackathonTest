@@ -106,6 +106,16 @@ Mở `index.html` qua GitHub Pages (Settings → Pages → nhánh `main`, thư m
 - **Vườn hàng xóm**: gom điểm, thuê người giữ vườn, hái trộm điểm của địa chỉ bạn bè trên L1.
 - Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn chạy mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
 
+## 9. Cloudflare Pages
+
+Site đang chạy tại **https://hanazono-b9s.pages.dev/**, tự build lại mỗi lần push lên `main`.
+
+- Cài đặt project: Framework preset **None**, Build command **để trống**, Build output directory **`/`**. Không cần bước build: `index.html` nằm ở thư mục gốc, `prototype/chain.js` và `prototype/chain-config.js` được tải kèm.
+- Link dạng `https://<mã>.hanazono-b9s.pages.dev` là **bản deploy cố định của một commit cũ**, không bao giờ được cập nhật. Khi chia sẻ cho giám khảo, luôn dùng link production ở trên.
+- Sau khi `npm run deploy` sinh `prototype/chain-config.js` mới, commit và push file đó. Pages build lại trong khoảng 1 phút. File `_headers` tắt cache cho trang và config, nên người chơi nhận địa chỉ contract mới ngay.
+- Chế độ on-chain cần ví trình duyệt (Core hoặc MetaMask). RPC của Farm L1 phải cho phép gọi từ trình duyệt (CORS). Node của Builder Console mặc định cho phép. Nếu tự chạy node, đặt `--http-allowed-origins="*"`.
+- `.env` nằm trong `.gitignore` nên không bao giờ lên GitHub hay Pages.
+
 ## Đối chiếu yêu cầu chương trình (topic 11, DeFi Farm)
 
 | Yêu cầu MVP | Trong repo |

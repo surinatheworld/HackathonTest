@@ -1,0 +1,13 @@
+# Cloudflare Pages headers.
+# The page and the contract addresses must never be cached, so a fresh `npm run deploy` + push
+# reaches players immediately.
+/
+  Cache-Control: no-cache
+/prototype/chain-config.js
+  Cache-Control: no-cache
+/prototype/chain.js
+  Cache-Control: no-cache
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
