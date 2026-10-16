@@ -23,7 +23,7 @@
 |---|---|---|
 | P0 | Đưa **Hợp tác xã** (FarmCoop, giá Chainlink) và **Ao cá** (FarmPond, x·y=k) lên contract, kèm test | ✅ 17/10, đã nối vào game |
 | P0 | Rà event, viết `docs/EVENTS.md` | ✅ `CropClosed` có thêm `owner` và `points` |
-| P0 | Test biên bảo mật (rút cạn quỹ thưởng, trộm, 12 cây, replay, giá cũ, trượt giá) | ✅ 39 test. **Còn chạy Slither**: cần Python, xem `docs/DEPLOY.md` mục 2c |
+| P0 | Test biên bảo mật (rút cạn quỹ thưởng, trộm, 12 cây, replay, giá cũ, trượt giá) | ✅ 39 test. Slither: 0 High, đã vá hết reentrancy (xem `docs/SECURITY.md`) |
 | P0 | Deploy lại, verify, cập nhật config, chạy `test:fork` và `smoke:gasless` | ✅ 6 test fork qua, smoke qua Pages qua |
 | P1 | Nguồn lãi: `IYieldSource`, `MockYieldSource` trên Fuji, `AaveV3YieldSource` cho mainnet | ✅ Aave v3 không có pool trên Fuji nên adapter được test bằng pool giả |
 | P1 | Quản gia: session key tự hết hạn | ✅ Hạn 60 ngày (đến 15/12/2026) |

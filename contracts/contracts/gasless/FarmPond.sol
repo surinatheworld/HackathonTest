@@ -4,13 +4,14 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ERC2771Context} from "@openzeppelin/contracts/metatx/ERC2771Context.sol";
 
 /// Ao cá: a constant-product pool for USDC/gAVAX (x·y = k, 0.3% fee to liquidity providers).
 /// "Thả cá" adds liquidity, "vớt cá" removes it, and the impermanent loss players see is the real one.
 /// The USDC-only entry and exit (zapIn / zapOut) swap half through the pool itself, so a player
 /// who only holds USDC can still join. Gasless through FarmForwarder.
-contract FarmPond is ERC2771Context {
+contract FarmPond is ERC2771Context, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant FEE_BPS = 30;
@@ -43,24 +44,27 @@ contract FarmPond is ERC2771Context {
 
     /// Add both tokens. The first deposit sets the price; later ones take gAVAX at the pool ratio
     /// (up to maxAvax) for the USDC given.
-    function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares) external returns (uint256 shares) {
+    function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)
+        external
+        nonReentrant
+        returns (uint256 shares)
+    {
         if (usdcAmount == 0) revert ZeroAmount();
         address u = _msgSender();
         uint256 avaxAmount = totalShares == 0 ? maxAvax : (usdcAmount * reserveAvax + reserveUsdc - 1) / reserveUsdc;
         if (avaxAmount == 0) revert ZeroAmount();
         if (avaxAmount > maxAvax) revert Slippage(maxAvax, avaxAmount);
-        usdc.safeTransferFrom(u, address(this), usdcAmount);
-        avax.safeTransferFrom(u, address(this), avaxAmount);
         shares = _mint(u, usdcAmount, avaxAmount);
         if (shares < minShares) revert Slippage(shares, minShares);
+        usdc.safeTransferFrom(u, address(this), usdcAmount);
+        avax.safeTransferFrom(u, address(this), avaxAmount);
     }
 
     /// USDC only: swap the right part to gAVAX inside the pool, then add both.
-    function zapIn(uint256 usdcAmount, uint256 minShares) external returns (uint256 shares) {
+    function zapIn(uint256 usdcAmount, uint256 minShares) external nonReentrant returns (uint256 shares) {
         if (usdcAmount == 0) revert ZeroAmount();
         if (totalShares == 0) revert EmptyPool();
         address u = _msgSender();
-        usdc.safeTransferFrom(u, address(this), usdcAmount);
         uint256 swapIn = _zapSwapAmount(reserveUsdc, usdcAmount);
         uint256 avaxOut = _out(swapIn, reserveUsdc, reserveAvax);
         reserveUsdc += swapIn;
@@ -68,10 +72,12 @@ contract FarmPond is ERC2771Context {
         emit Swapped(u, true, swapIn, avaxOut);
         shares = _mint(u, usdcAmount - swapIn, avaxOut);
         if (shares < minShares) revert Slippage(shares, minShares);
+        usdc.safeTransferFrom(u, address(this), usdcAmount);
     }
 
     function removeLiquidity(uint256 shares, uint256 minUsdc, uint256 minAvax)
         external
+        nonReentrant
         returns (uint256 usdcOut, uint256 avaxOut)
     {
         address u = _msgSender();
@@ -83,7 +89,7 @@ contract FarmPond is ERC2771Context {
     }
 
     /// Exit to USDC only: remove, then sell the gAVAX part back into the pool.
-    function zapOut(uint256 shares, uint256 minUsdc) external returns (uint256 usdcOut) {
+    function zapOut(uint256 shares, uint256 minUsdc) external nonReentrant returns (uint256 usdcOut) {
         address u = _msgSender();
         (uint256 fromPool, uint256 avaxPart) = _burn(u, shares);
         uint256 sold = _out(avaxPart, reserveAvax, reserveUsdc);
@@ -98,23 +104,23 @@ contract FarmPond is ERC2771Context {
     // ---------- trading ----------
 
     /// Chợ phiên and arbitrage keepers use this to pull the pool price back to the oracle price.
-    function swap(bool usdcIn, uint256 amountIn, uint256 minOut) external returns (uint256 amountOut) {
+    function swap(bool usdcIn, uint256 amountIn, uint256 minOut) external nonReentrant returns (uint256 amountOut) {
         if (amountIn == 0) revert ZeroAmount();
         if (totalShares == 0) revert EmptyPool();
         address u = _msgSender();
         if (usdcIn) {
             amountOut = _out(amountIn, reserveUsdc, reserveAvax);
             if (amountOut < minOut) revert Slippage(amountOut, minOut);
-            usdc.safeTransferFrom(u, address(this), amountIn);
             reserveUsdc += amountIn;
             reserveAvax -= amountOut;
+            usdc.safeTransferFrom(u, address(this), amountIn);
             avax.safeTransfer(u, amountOut);
         } else {
             amountOut = _out(amountIn, reserveAvax, reserveUsdc);
             if (amountOut < minOut) revert Slippage(amountOut, minOut);
-            avax.safeTransferFrom(u, address(this), amountIn);
             reserveAvax += amountIn;
             reserveUsdc -= amountOut;
+            avax.safeTransferFrom(u, address(this), amountIn);
             usdc.safeTransfer(u, amountOut);
         }
         emit Swapped(u, usdcIn, amountIn, amountOut);
@@ -142,7 +148,7 @@ contract FarmPond is ERC2771Context {
         if (totalShares == 0) return (shares, 0, 0, 0);
         usdcPart = (reserveUsdc * shares) / totalShares;
         avaxPart = (reserveAvax * shares) / totalShares;
-        valueUsdc = usdcPart * 2;
+        valueUsdc = (reserveUsdc * shares * 2) / totalShares;
     }
 
     // ---------- internals ----------

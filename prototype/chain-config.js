@@ -9,15 +9,15 @@ window.FARM_CONFIG = {
     "rpc": "https://api.avax-test.network/ext/bc/C/rpc",
     "explorer": "https://testnet.snowtrace.io",
     "currency": "AVAX",
-    "forwarder": "0x2B799E755a2BEd299286e177FDE9495b79401FFF",
-    "usdc": "0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC",
-    "gavax": "0xc0c27243221de25a961D8B20274cbFc2196f8D4C",
-    "game": "0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e",
-    "coop": "0x850aE1CF266CF902E443a82f1d94C3d94753d946",
-    "pond": "0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe",
-    "butler": "0x90c10aD9a2A8f2Aea27B8EeAf83724937cF2353b",
-    "yieldSource": "0xC47B70C7D75B7634f6B1bC9fA2eC993C7e6ff9C5",
+    "forwarder": "0x7dD93fef1ce942f11fc72E5BD7F53f749A028636",
+    "usdc": "0x794659AB388EEec7f80038191bA763f900CE1978",
+    "gavax": "0xa1e8250Bcbab7436252e3c25764f8898913E7c1C",
+    "game": "0x01443baD9354683eE2691cD8aDD88e34c557055F",
+    "coop": "0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf",
+    "pond": "0x33bA73746cCbe75eE5967Afa2EBfE07F6F543A37",
+    "butler": "0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293",
+    "yieldSource": "0x25578A396c89a410EF49a888314911A031185caA",
     "chainlinkAvaxUsd": "0x5498BB86BC934c8D34FDA08E81D444153d0D06aD",
-    "demoFeed": "0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079"
+    "demoFeed": "0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B"
   }
 };

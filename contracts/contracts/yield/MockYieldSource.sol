@@ -25,6 +25,9 @@ contract MockYieldSource is IYieldSource {
     uint256 public earned;
     uint256 public last;
 
+    event Deposited(uint256 amount, uint256 principal);
+    event Withdrawn(uint256 amount, uint256 principal);
+
     error NotClient();
 
     constructor(address asset_, address client_, uint256 aprBps_, uint256 dayLength_) {
@@ -42,8 +45,9 @@ contract MockYieldSource is IYieldSource {
 
     function deposit(uint256 amount) external onlyClient {
         _accrue();
-        asset.safeTransferFrom(msg.sender, address(this), amount);
         principal += amount;
+        emit Deposited(amount, principal);
+        asset.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function withdraw(uint256 amount) external onlyClient {
@@ -54,6 +58,7 @@ contract MockYieldSource is IYieldSource {
         } else {
             earned -= amount;
         }
+        emit Withdrawn(amount, principal);
         uint256 held = asset.balanceOf(address(this));
         if (held < amount) IMintable(address(asset)).mint(address(this), amount - held);
         asset.safeTransfer(msg.sender, amount);

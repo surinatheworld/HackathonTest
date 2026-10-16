@@ -40,35 +40,35 @@ Event của mọi contract (cho indexer và bot) xem [docs/EVENTS.md](docs/EVENT
 
 ## Đã deploy trên Fuji C-Chain
 
-Bản thứ hai, deploy ngày 17/10/2026. Owner là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
+Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md)), deploy ngày 17/10/2026. Owner là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
 
 | Contract | Địa chỉ |
 |---|---|
-| FarmGame | [`0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e`](https://testnet.snowtrace.io/address/0x7A6ab8031ECc13F8ef5d08f553Cc807fEa5D721e#code) |
-| FarmCoop | [`0x850aE1CF266CF902E443a82f1d94C3d94753d946`](https://testnet.snowtrace.io/address/0x850aE1CF266CF902E443a82f1d94C3d94753d946#code) |
-| FarmPond | [`0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe`](https://testnet.snowtrace.io/address/0xD9b9F2AcC116a88Ce0aCC656cA8653103Cb1caCe#code) |
-| GaslessUSDC | [`0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC`](https://testnet.snowtrace.io/address/0x2c6555aa283A8dBF52BE3883E9dFCf55447Ad6BC#code) |
-| GaslessAVAX (gAVAX) | [`0xc0c27243221de25a961D8B20274cbFc2196f8D4C`](https://testnet.snowtrace.io/address/0xc0c27243221de25a961D8B20274cbFc2196f8D4C#code) |
-| FarmForwarder | [`0x2B799E755a2BEd299286e177FDE9495b79401FFF`](https://testnet.snowtrace.io/address/0x2B799E755a2BEd299286e177FDE9495b79401FFF#code) |
-| ButlerAccount | [`0x90c10aD9a2A8f2Aea27B8EeAf83724937cF2353b`](https://testnet.snowtrace.io/address/0x90c10aD9a2A8f2Aea27B8EeAf83724937cF2353b#code) |
-| MockYieldSource | [`0xC47B70C7D75B7634f6B1bC9fA2eC993C7e6ff9C5`](https://testnet.snowtrace.io/address/0xC47B70C7D75B7634f6B1bC9fA2eC993C7e6ff9C5#code) |
-| DemoPriceFeed | [`0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079`](https://testnet.snowtrace.io/address/0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079#code) |
+| FarmGame | [`0x01443baD9354683eE2691cD8aDD88e34c557055F`](https://testnet.snowtrace.io/address/0x01443baD9354683eE2691cD8aDD88e34c557055F#code) |
+| FarmCoop | [`0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf`](https://testnet.snowtrace.io/address/0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf#code) |
+| FarmPond | [`0x33bA73746cCbe75eE5967Afa2EBfE07F6F543A37`](https://testnet.snowtrace.io/address/0x33bA73746cCbe75eE5967Afa2EBfE07F6F543A37#code) |
+| GaslessUSDC | [`0x794659AB388EEec7f80038191bA763f900CE1978`](https://testnet.snowtrace.io/address/0x794659AB388EEec7f80038191bA763f900CE1978#code) |
+| GaslessAVAX (gAVAX) | [`0xa1e8250Bcbab7436252e3c25764f8898913E7c1C`](https://testnet.snowtrace.io/address/0xa1e8250Bcbab7436252e3c25764f8898913E7c1C#code) |
+| FarmForwarder | [`0x7dD93fef1ce942f11fc72E5BD7F53f749A028636`](https://testnet.snowtrace.io/address/0x7dD93fef1ce942f11fc72E5BD7F53f749A028636#code) |
+| ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
+| MockYieldSource | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
+| DemoPriceFeed | [`0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B`](https://testnet.snowtrace.io/address/0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B#code) |
 | Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
 | Ví trả gas của fee manager | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC` |
 
 Lúc deploy:
 - Quỹ thưởng có 50.000 USDC, trong đó 40.000 USDC gửi vào nguồn lãi.
 - Hợp tác xã có 50.000 USDC để cho vay.
-- Ao cá có 20.000 USDC và 2.012,5 gAVAX, theo giá Chainlink lúc đó là $9,94.
+- Ao cá có 20.000 USDC và 2.015,1 gAVAX, theo giá Chainlink lúc đó là $9,93.
 
 **Bằng chứng trên Fuji** (`npm run smoke:gasless`, một ví mới, từ đầu đến cuối 0 AVAX):
-- Ruộng rau và Vườn cây: faucet ([tx](https://testnet.snowtrace.io/tx/0xfa6ed605454da9113bb69501d565d4d1a436512779231ee9dfdec596abb8e63b)), trồng 10 USDC ([tx](https://testnet.snowtrace.io/tx/0x793a991893ed7c11426307e50ff3f49c2a1632665d711d8df1b7c3fb89378738)), gửi 50 USDC vào Ruộng rau ([tx](https://testnet.snowtrace.io/tx/0xf7e33e893d4bde810573974e09d189d0c7dddab004b824cb2a4bb4369b99396f)).
-- Hợp tác xã: gửi 5 gAVAX ([tx](https://testnet.snowtrace.io/tx/0x96cfc12b6f3000783a047b25e1e707ef9a41111420147684559ed837c68b27d1)), vay 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xadd1bad49e9e6dc4018ada6a67e4e694f4503cf1f53d573dcfdefe5697428653)).
-- Ao cá: thả 100 USDC ([tx](https://testnet.snowtrace.io/tx/0xb5132dd590db8f924a8fcd6ffb7e2926b3df90e1e254cf85cb7866315a39631c)).
+- Ruộng rau và Vườn cây: faucet ([tx](https://testnet.snowtrace.io/tx/0xe32707387cf8a79ed084360589fba4474167f524de6adf1a07aec73788eacd25)), trồng 10 USDC ([tx](https://testnet.snowtrace.io/tx/0x91d94f198613b982bb54ef0e7bc58436d9d2854b85251743dd00285d34fa8d34)), gửi 50 USDC vào Ruộng rau ([tx](https://testnet.snowtrace.io/tx/0x99e95b3fba78d8395c788f29342a2b6ce379991fafcf022692b74a8d9bd7e3a8)).
+- Hợp tác xã: gửi 5 gAVAX ([tx](https://testnet.snowtrace.io/tx/0xf2c8a59bd369f13530c930b2c3f1a75d43e351726a6194a06be3dae27f607d12)), vay 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xac904fd0e9c7cfaeaaba3b9a218f7e5ef8f05ada56452352479d9b9e5575999e)).
+- Ao cá: thả 100 USDC ([tx](https://testnet.snowtrace.io/tx/0x0a49c7e7d06ac2b752871e6a11df1b383f63c7de656236d4b27c6c0d18de850a)).
 - Fee manager từ chối `approve` tới ví lạ (HTTP 403).
-- Quản gia AI (`npm run butler:demo`): gửi 50 USDC trong hạn mức ([tx](https://testnet.snowtrace.io/tx/0x991c7fd325894008a6fccd1e83d67600c6ecc1d0f5307d767c61f155800adc36)). Ba lệnh do prompt injection bị contract chặn: `CallNotAllowed`, `ArgumentNotAllowed`, `DailyCapExceeded`.
+- Quản gia AI (`npm run butler:demo`): gửi 50 USDC trong hạn mức ([tx](https://testnet.snowtrace.io/tx/0xb8e728ab9b493ce37daa05e0b6dfebb189575bdb8b061c815a0b5bfb6a82a55f)). Ba lệnh do prompt injection bị contract chặn: `CallNotAllowed`, `ArgumentNotAllowed`, `DailyCapExceeded`.
 
-Địa chỉ bản đầu (chỉ có FarmGame, USDC, forwarder, quản gia) vẫn còn trên Fuji, xem `git log` trước commit này.
+Các bản trước vẫn còn trên Fuji, xem `contracts/deployments/fuji-gasless.json` trong `git log`.
 
 ## Cấu trúc
 
@@ -87,6 +87,7 @@ contracts/test/                 gasless, coop-pond, farm (L1), fork/fuji.fork.js
 docs/DEPLOY.md                  Deploy, fee manager, Cloudflare, demo hạn hán
 docs/EVENTS.md                  Event cho indexer và bot
 docs/TEAM-TASKS.md              Phân công kỹ thuật
+docs/SECURITY.md                Kết quả Slither và các tình huống đã test
 ```
 
 ## Chạy nhanh

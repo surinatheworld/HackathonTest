@@ -21,6 +21,7 @@ contract AaveV3YieldSource is IYieldSource {
     address public immutable client;
 
     error NotClient();
+    error ShortWithdraw(uint256 got, uint256 wanted);
 
     constructor(address pool_, address asset_, address aToken_, address client_) {
         pool = IAavePool(pool_);
@@ -41,7 +42,8 @@ contract AaveV3YieldSource is IYieldSource {
     }
 
     function withdraw(uint256 amount) external onlyClient {
-        pool.withdraw(address(asset), amount, msg.sender);
+        uint256 got = pool.withdraw(address(asset), amount, msg.sender);
+        if (got != amount) revert ShortWithdraw(got, amount);
     }
 
     function balance() external view returns (uint256) {

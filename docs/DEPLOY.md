@@ -47,9 +47,9 @@ npm run test:fork       # test trên chính các contract đã deploy
 
 Hợp tác xã đọc giá thật từ Chainlink, nên bình thường không thể cho giá AVAX sập theo ý muốn. Muốn demo thanh lý thì tạm chuyển HTX sang `DemoPriceFeed`. Việc chuyển này **chỉ owner** (ví `0x54A2…2888` của bạn) làm được, và ví cần một ít AVAX Fuji để trả gas.
 
-1. Mở [FarmCoop trên Snowtrace](https://testnet.snowtrace.io/address/0x850aE1CF266CF902E443a82f1d94C3d94753d946#writeContract), mục **Write Contract**, bấm **Connect to Web3** bằng MetaMask (ví `0x54A2…2888`, mạng Fuji).
+1. Mở [FarmCoop trên Snowtrace](https://testnet.snowtrace.io/address/0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf#writeContract), mục **Write Contract**, bấm **Connect to Web3** bằng MetaMask (ví `0x54A2…2888`, mạng Fuji).
 2. Gọi `setOracle`:
-   - `oracle_` = `0x5ce867f0c55CAFeb5b0F370Ad10532116Bc45079` (DemoPriceFeed)
+   - `oracle_` = `0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B` (DemoPriceFeed)
    - `maxPriceAge_` = `86400`
 
    Bấm **Write** và ký.
@@ -62,25 +62,7 @@ Hợp tác xã đọc giá thật từ Chainlink, nên bình thường không th
 
 ## 2c. Rà bảo mật bằng Slither
 
-Máy dùng để deploy chưa có Python nên chưa chạy được Slither. Tự chạy như sau:
-
-```bash
-# Cài Python 3.11+ từ python.org (tick "Add python.exe to PATH"), rồi:
-pip install slither-analyzer
-cd contracts
-npx hardhat compile
-slither . --filter-paths "node_modules|contracts/l1|contracts/test|ICMApp|FarmVault|MockUSDC"
-```
-
-Các điểm đã kiểm tra bằng test (`test/coop-pond.test.js`, `test/gasless.test.js`):
-- Không rút cạn được quỹ thưởng: lãi bị chặn ở mức quỹ còn, gốc luôn trả đủ.
-- Tối đa 12 cây mỗi vườn. Không trộm được của chính mình. Ví chưa trồng cây không được trộm.
-- Chữ ký không phát lại được, không ai ký thay người khác được, request hết hạn bị từ chối.
-- Giá Chainlink cũ thì không cho vay. Không nợ thì vẫn rút được thế chấp. Chỉ thanh lý được khi hệ số dưới 1,0.
-- Ao cá có kiểm tra trượt giá. Ví người tạo pool bị khóa 1.000 share để không ai thổi phồng được giá share.
-- Khóa phiên của agent tự hết hạn.
-
-Kết quả Slither dạng "reentrancy" trên FarmCoop/FarmPond/FarmGame chủ yếu là báo nhầm: token là ERC-20 của chính dự án, không có hook gọi lại. Lỗi mức High hoặc Medium khác thì mở issue và báo cho người làm Blockchain.
+Đã chạy Slither 0.11.6 ngày 17/10/2026. Kết quả, các lỗi đã sửa và lệnh để chạy lại có trong [SECURITY.md](SECURITY.md).
 
 ## 3. Chạy offline
 

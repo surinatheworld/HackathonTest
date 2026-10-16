@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ERC2771Context} from "@openzeppelin/contracts/metatx/ERC2771Context.sol";
 
 interface IPriceFeed {
@@ -17,7 +18,7 @@ interface IPriceFeed {
 /// Priced by Chainlink AVAX/USD on Fuji. Borrow up to 60% of the collateral value; once debt passes
 /// 75% anyone may repay it and take the collateral plus a 10% penalty. Debt grows at 8% APR,
 /// counted in game days like the rest of the farm. Gasless through FarmForwarder.
-contract FarmCoop is ERC2771Context {
+contract FarmCoop is ERC2771Context, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 private constant BPS = 10_000;
@@ -60,6 +61,7 @@ contract FarmCoop is ERC2771Context {
     error StalePrice(uint256 updatedAt);
     error BadPrice();
     error NoLiquidity(uint256 available);
+    error ZeroAddress();
 
     constructor(address forwarder, address usdc_, address avax_, address oracle_, uint256 maxPriceAge_, uint256 dayLength_)
         ERC2771Context(forwarder)
@@ -76,18 +78,20 @@ contract FarmCoop is ERC2771Context {
 
     function transferOwnership(address next) external {
         if (_msgSender() != owner) revert NotOwner();
+        if (next == address(0)) revert ZeroAddress();
         owner = next;
     }
 
     /// Switch feeds, e.g. to a demo feed to stage a "drought" (price crash) on stage.
     function setOracle(address oracle_, uint256 maxPriceAge_) external {
         if (_msgSender() != owner) revert NotOwner();
+        if (oracle_ == address(0)) revert ZeroAddress();
         oracle = IPriceFeed(oracle_);
         maxPriceAge = maxPriceAge_;
         emit OracleSet(oracle_, maxPriceAge_);
     }
 
-    function fund(uint256 amount) external {
+    function fund(uint256 amount) external nonReentrant {
         usdc.safeTransferFrom(_msgSender(), address(this), amount);
         emit LiquidityFunded(_msgSender(), amount);
     }
@@ -110,16 +114,16 @@ contract FarmCoop is ERC2771Context {
 
     // ---------- player ----------
 
-    function depositCollateral(uint256 amount) external {
+    function depositCollateral(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         address u = _msgSender();
-        avax.safeTransferFrom(u, address(this), amount);
         positions[u].collateral += amount;
         totalCollateral += amount;
+        avax.safeTransferFrom(u, address(this), amount);
         emit CollateralDeposited(u, amount);
     }
 
-    function withdrawCollateral(uint256 amount) external {
+    function withdrawCollateral(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         address u = _msgSender();
         Position storage p = _accrue(u);
@@ -132,7 +136,7 @@ contract FarmCoop is ERC2771Context {
         emit CollateralWithdrawn(u, amount);
     }
 
-    function borrow(uint256 amount) external {
+    function borrow(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         address u = _msgSender();
         Position storage p = _accrue(u);
@@ -146,19 +150,19 @@ contract FarmCoop is ERC2771Context {
     }
 
     /// Repay your own debt, or anyone's (e.g. a friend). Overpaying is capped at the debt.
-    function repay(address user, uint256 amount) external returns (uint256 paid) {
+    function repay(address user, uint256 amount) external nonReentrant returns (uint256 paid) {
         Position storage p = _accrue(user);
         if (p.debt == 0) revert NoDebt();
         paid = amount > p.debt ? p.debt : amount;
         if (paid == 0) revert ZeroAmount();
-        usdc.safeTransferFrom(_msgSender(), address(this), paid);
         p.debt -= paid;
+        usdc.safeTransferFrom(_msgSender(), address(this), paid);
         emit Repaid(user, _msgSender(), paid, p.debt);
     }
 
     /// Anyone (a keeper bot or another player) repays the whole debt of an unhealthy position and
     /// takes collateral worth that debt plus the penalty, capped at what the position holds.
-    function liquidate(address user) external returns (uint256 seized) {
+    function liquidate(address user) external nonReentrant returns (uint256 seized) {
         Position storage p = _accrue(user);
         if (p.debt == 0) revert NoDebt();
         uint256 h = _health(p);
@@ -168,10 +172,10 @@ contract FarmCoop is ERC2771Context {
         seized = (debt * (BPS + LIQ_PENALTY_BPS) * 1e20) / (BPS * px);
         if (seized > p.collateral) seized = p.collateral;
         address liquidator = _msgSender();
-        usdc.safeTransferFrom(liquidator, address(this), debt);
         p.debt = 0;
         p.collateral -= seized;
         totalCollateral -= seized;
+        usdc.safeTransferFrom(liquidator, address(this), debt);
         avax.safeTransfer(liquidator, seized);
         emit Liquidated(user, liquidator, debt, seized);
     }

@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC2771Context} from "@openzeppelin/contracts/metatx/ERC2771Context.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IYieldSource} from "../yield/IYieldSource.sol";
 
 /// Nông Trại DeFi on a single chain (Fuji C-Chain), gasless through FarmForwarder.
@@ -13,7 +14,7 @@ import {IYieldSource} from "../yield/IYieldSource.sol";
 ///  - Where the yield comes from: the owner parks idle USDC in an IYieldSource (a lending market) and
 ///    harvestYield() moves what it earned into the reward pool. Player exits pull it back when needed.
 /// Every player action uses _msgSender(), so it works both as a normal tx and as a relayed one.
-contract FarmGame is ERC2771Context {
+contract FarmGame is ERC2771Context, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 private constant BPS = 10_000;
@@ -101,6 +102,7 @@ contract FarmGame is ERC2771Context {
     error CannotStealFromYourself();
     error SourceInUse();
     error NoYieldSource();
+    error ZeroAddress();
 
     constructor(address forwarder, address usdc_, uint256 dayLength_) ERC2771Context(forwarder) {
         usdc = IERC20(usdc_);
@@ -110,6 +112,7 @@ contract FarmGame is ERC2771Context {
 
     function transferOwnership(address next) external {
         if (_msgSender() != owner) revert NotOwner();
+        if (next == address(0)) revert ZeroAddress();
         emit OwnershipTransferred(owner, next);
         owner = next;
     }
@@ -123,26 +126,26 @@ contract FarmGame is ERC2771Context {
     }
 
     /// Park idle USDC in the yield source. Player exits pull it back automatically if needed.
-    function invest(uint256 amount) external onlyOwner {
+    function invest(uint256 amount) external onlyOwner nonReentrant {
         if (address(yieldSource) == address(0)) revert NoYieldSource();
+        invested += amount;
         usdc.forceApprove(address(yieldSource), amount);
         yieldSource.deposit(amount);
-        invested += amount;
         emit Invested(amount, invested);
     }
 
-    function divest(uint256 amount) external onlyOwner {
+    function divest(uint256 amount) external onlyOwner nonReentrant {
         _divest(amount);
     }
 
     /// Anyone may call: what the source earned above the principal goes into the reward pool.
-    function harvestYield() external returns (uint256 gain) {
+    function harvestYield() external nonReentrant returns (uint256 gain) {
         if (address(yieldSource) == address(0)) revert NoYieldSource();
         uint256 bal = yieldSource.balance();
         if (bal <= invested) return 0;
         gain = bal - invested;
-        yieldSource.withdraw(gain);
         rewardReserve += gain;
+        yieldSource.withdraw(gain);
         emit YieldHarvested(gain, rewardReserve);
     }
 
@@ -163,25 +166,25 @@ contract FarmGame is ERC2771Context {
         return uint64(block.timestamp / dayLength);
     }
 
-    function fundRewards(uint256 amount) external {
-        usdc.safeTransferFrom(_msgSender(), address(this), amount);
+    function fundRewards(uint256 amount) external nonReentrant {
         rewardReserve += amount;
+        usdc.safeTransferFrom(_msgSender(), address(this), amount);
         emit RewardsFunded(_msgSender(), amount);
     }
 
     // ---------- Ruộng rau ----------
 
-    function deposit(uint256 amount) external {
+    function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         address u = _msgSender();
         _accrue(u);
-        usdc.safeTransferFrom(u, address(this), amount);
         lends[u].principal += amount;
         totalLent += amount;
+        usdc.safeTransferFrom(u, address(this), amount);
         emit Deposited(u, amount);
     }
 
-    function withdraw(uint256 amount) external {
+    function withdraw(uint256 amount) external nonReentrant {
         address u = _msgSender();
         _accrue(u);
         Lend storage l = lends[u];
@@ -193,7 +196,7 @@ contract FarmGame is ERC2771Context {
         emit Withdrawn(u, amount);
     }
 
-    function claim() external returns (uint256 paid) {
+    function claim() external nonReentrant returns (uint256 paid) {
         address u = _msgSender();
         _accrue(u);
         Lend storage l = lends[u];
@@ -210,18 +213,18 @@ contract FarmGame is ERC2771Context {
 
     // ---------- Vườn cây ----------
 
-    function plant(uint8 tier, uint256 amount) external returns (uint256 cropId) {
+    function plant(uint8 tier, uint256 amount) external nonReentrant returns (uint256 cropId) {
         if (tier > 2) revert BadTier();
         if (amount == 0) revert ZeroAmount();
         address u = _msgSender();
         Farmer storage f = farmers[u];
         if (f.activeCrops >= MAX_ACTIVE_CROPS) revert FarmFull();
-        usdc.safeTransferFrom(u, address(this), amount);
         f.activeCrops++;
         totalLocked += amount;
         cropId = nextCropId++;
         crops[cropId] = Crop(u, tier, Status.Growing, uint64(block.timestamp), 0, amount, 0);
         _cropsOf[u].push(cropId);
+        usdc.safeTransferFrom(u, address(this), amount);
         emit Planted(cropId, u, tier, amount);
     }
 
@@ -239,7 +242,7 @@ contract FarmGame is ERC2771Context {
         return (c.amount * tierApyBps(c.tier) * elapsed) / (BPS * YEAR_DAYS * dayLength);
     }
 
-    function harvest(uint256 cropId) external {
+    function harvest(uint256 cropId) external nonReentrant {
         Crop storage c = _own(cropId);
         uint256 ripe = readyAt(cropId);
         if (block.timestamp < ripe) revert NotRipe(ripe);
@@ -250,7 +253,7 @@ contract FarmGame is ERC2771Context {
     }
 
     /// Pull the crop early: principal back, yield forfeited.
-    function uproot(uint256 cropId) external {
+    function uproot(uint256 cropId) external nonReentrant {
         Crop storage c = _own(cropId);
         _close(cropId, Status.Uprooted, c.amount, 0);
     }
@@ -342,8 +345,8 @@ contract FarmGame is ERC2771Context {
     function _divest(uint256 amount) private {
         if (amount > invested) amount = invested;
         if (amount == 0) return;
-        yieldSource.withdraw(amount);
         invested -= amount;
+        yieldSource.withdraw(amount);
         emit Divested(amount, invested);
     }
 

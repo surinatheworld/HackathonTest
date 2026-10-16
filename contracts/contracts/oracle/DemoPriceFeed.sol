@@ -9,6 +9,8 @@ contract DemoPriceFeed {
     uint256 public updatedAt;
     uint8 public constant decimals = 8;
 
+    event PriceSet(int256 answer);
+
     error NotOwner();
 
     constructor(int256 answer_) {
@@ -21,6 +23,7 @@ contract DemoPriceFeed {
         if (msg.sender != owner) revert NotOwner();
         answer = answer_;
         updatedAt = block.timestamp;
+        emit PriceSet(answer_);
     }
 
     function transferOwnership(address next) external {

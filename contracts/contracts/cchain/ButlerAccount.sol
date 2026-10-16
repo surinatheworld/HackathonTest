@@ -34,6 +34,7 @@ contract ButlerAccount {
     error AgentIsRevoked();
     error AgentExpired(uint64 validUntil);
     error BadExpiry();
+    error ZeroAddress();
     error CallNotAllowed(address target, bytes4 selector);
     error ArgumentNotAllowed(address expected, address got);
     error DailyCapExceeded(uint256 requested, uint256 remaining);
@@ -52,6 +53,7 @@ contract ButlerAccount {
     /// Grant a session key until `validUntil` (unix seconds). Re-grant to extend it.
     function setAgent(address agent_, uint256 dailyCap_, uint64 validUntil) external onlyOwner {
         if (validUntil <= block.timestamp) revert BadExpiry();
+        if (agent_ == address(0)) revert ZeroAddress();
         agent = agent_;
         dailyCap = dailyCap_;
         agentValidUntil = validUntil;
@@ -61,6 +63,7 @@ contract ButlerAccount {
 
     /// Hand the account to its real owner after a scripted setup.
     function transferOwnership(address next) external onlyOwner {
+        if (next == address(0)) revert ZeroAddress();
         emit OwnershipTransferred(owner, next);
         owner = next;
     }
@@ -85,7 +88,7 @@ contract ButlerAccount {
     }
 
     function execute(address target, bytes calldata data) external returns (bytes memory result) {
-        uint256 counted;
+        uint256 counted = 0;
         if (msg.sender != owner) {
             if (msg.sender != agent) revert NotAuthorized();
             if (!agentActive) revert AgentIsRevoked();
