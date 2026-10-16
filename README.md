@@ -4,29 +4,51 @@ Game nông trại 2D để học DeFi trên Avalanche. Dự án cho **Team1 Viet
 
 Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình trong làng là một cơ chế DeFi thật. Trạng thái game chạy trên **Game L1** riêng (gas gần như bằng 0), tiền thật nằm ở **C-Chain**, hai bên nói chuyện qua **ICM (Teleporter)**.
 
-> Trạng thái hiện tại: **prototype giao diện + mô phỏng**. Số dư, giá AVAX và giao dịch đều chạy trong trình duyệt, chưa có smart contract hay kết nối chain.
+> Trạng thái: contract đã viết và có test (11/11 pass), chạy end-to-end offline bằng `npm run local`. Deploy lên Fuji + Game L1 làm theo [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Chạy prototype
+## Cấu trúc
 
-Mở `prototype/index.html` bằng trình duyệt. Không cần cài gì.
+```
+contracts/                 Hardhat project
+  contracts/l1/FarmLand.sol        Game L1: luống, cây, điểm, tưới, trộm điểm
+  contracts/cchain/FarmVault.sol   C-Chain: cho vay 4%, khóa 7/30/90 ngày, quỹ thưởng
+  contracts/cchain/ButlerAccount.sol  Ví quản gia AI: session key, rule, hạn mức, kill switch
+  contracts/ICMApp.sol             Ghép cặp 2 contract qua TeleporterMessenger
+  test/farm.test.js                Luồng ICM hai chiều, lending, game loop, guardrail
+  scripts/                         deploy, link, smoke test, butler demo, local dev server
+prototype/                 Game 2D (canvas) + chain.js (ethers v6) + chain-config.js
+docs/DEPLOY.md             Hướng dẫn L1 + ICM Relayer trên Builder Console
+```
+
+## Chạy nhanh
+
+```bash
+cd contracts
+npm install
+npm test          # 11 test
+npm run local     # mở http://localhost:8790/?wallet=dev
+```
+
+Chỉ xem giao diện mô phỏng: mở thẳng `prototype/index.html`.
 
 - Di chuyển: `WASD` / phím mũi tên, hoặc chạm vào một khu trên bản đồ để nhân vật tự đi tới.
 - Tương tác: đứng cạnh biển gỗ rồi bấm `E` (hoặc nút vàng ở dưới).
 - `7×` tua nhanh thời gian, `Gây bão` ép giá AVAX giảm mạnh, `Bản thiết kế` xem kiến trúc.
-- Debug trong console: `window.__farm` (`st`, `openZone`, `ACT`, `sim`).
+- **Kết nối ví**: Ruộng rau, Vườn cây, Vườn hàng xóm chuyển sang contract thật.
+- Debug trong console: `window.__farm` (`st`, `openZone`, `ACT`, `sim`), `window.FarmChain`.
 
 ## Các khu và cơ chế
 
 | Khu | Cơ chế DeFi | Contract dự kiến | Chain |
 |---|---|---|---|
-| Ruộng rau | Cho vay stablecoin, rút bất cứ lúc nào | `LendingVault` | C-Chain |
-| Vườn cây | Staking khóa 7 / 30 / 90 ngày (ớt, xoài, sầu riêng) | `TierVault` | C-Chain |
+| Ruộng rau | Cho vay stablecoin, rút bất cứ lúc nào | `FarmVault` ✓ | C-Chain |
+| Vườn cây | Staking khóa 7 / 30 / 90 ngày (ớt, xoài, sầu riêng) | `FarmVault` + `FarmLand` qua ICM ✓ | L1 → C-Chain |
 | Ao cá | LP USDC/AVAX, thời tiết lấy từ oracle giá (impermanent loss) | `PondLP` + `WeatherOracle` | C-Chain → L1 |
 | Hợp tác xã | Thế chấp AVAX, vay USDC, thanh lý khi hệ số an toàn < 1 | `CoopLending` | C-Chain |
 | Chợ phiên | AMM x·y = k, hiển thị trượt giá | DEX có sẵn trên Fuji | C-Chain |
-| Nhà quản gia AI | Agent dùng session key, bị giới hạn bởi policy (hạn mức ngày, whitelist, kill switch); tư vấn trả phí qua x402 | `SmartAccount` + `PolicyModule` | C-Chain |
-| Vườn bác Tư | "Trộm rau": hái điểm thưởng của hàng xóm, không đụng tiền gốc | `Points` | Game L1 |
-| Cổng làng | Thông điệp xuyên chain | ICM sender / receiver | L1 ↔ C-Chain |
+| Nhà quản gia AI | Agent dùng session key, bị giới hạn bởi policy (hạn mức ngày, whitelist, kill switch); tư vấn trả phí qua x402 | `ButlerAccount` ✓ | C-Chain |
+| Vườn bác Tư | "Trộm rau": hái điểm thưởng của hàng xóm, không đụng tiền gốc | `FarmLand` ✓ | Game L1 |
+| Cổng làng | Thông điệp xuyên chain | `ICMApp` ✓ | L1 ↔ C-Chain |
 
 Không có token game, không có random drop: mọi thứ tất định, tránh rủi ro bị coi là cờ bạc khi pitch tại Việt Nam.
 
@@ -39,11 +61,14 @@ Không có token game, không có random drop: mọi thứ tất định, tránh
 ## Lộ trình
 
 - [x] Prototype game 2D và mô phỏng cơ chế
-- [ ] Contract C-Chain: `LendingVault`, `TierVault`, `CoopLending`, `SmartAccount` + `PolicyModule` (Foundry, kèm test)
-- [ ] Game L1 (Avalanche CLI / Builder Hub) với `Farm`, `Plot`, `Points`
-- [ ] Luồng ICM: gieo hạt trên L1 → deposit trên C-Chain → receipt về L1
-- [ ] Nối prototype với Fuji qua embedded wallet
-- [ ] Agent quản gia (rule-based + LLM giải thích) và endpoint tư vấn x402
+- [x] Contract C-Chain: `FarmVault` (lending + 3 tier), `ButlerAccount` (guardrail), kèm test
+- [x] Contract Game L1: `FarmLand` (crop, điểm, streak, trộm điểm)
+- [x] Luồng ICM hai chiều: plant / harvest / uproot ↔ receipt
+- [x] Nối game với ví (Core / MetaMask) cho Ruộng rau, Vườn cây, Vườn hàng xóm
+- [x] Chạy offline end-to-end (`npm run local`)
+- [ ] Tạo Farm L1 + ICM Relayer trên Builder Console, deploy Fuji (xem docs/DEPLOY.md)
+- [ ] Đưa Ao cá (LP), Hợp tác xã (vay thế chấp) lên contract
+- [ ] Agent quản gia chạy thật (rule-based + LLM giải thích) và endpoint tư vấn x402
 - [ ] Pixel art thật thay cho đồ họa vẽ bằng code
 
 ## Mốc thời gian

@@ -1,5 +1,9 @@
 node_modules/
 .env
 .env.*
+!.env.example
+artifacts/
+cache/
 .DS_Store
 Thumbs.db
+**/deployments/local.json

@@ -1,0 +1,31 @@
+{
+  "name": "nong-trai-defi-contracts",
+  "version": "1.0.0",
+  "description": "Nông Trại DeFi: FarmVault (C-Chain), FarmLand (Game L1), ButlerAccount, ICM",
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat compile",
+    "wallet": "node scripts/new-wallet.js",
+    "deploy:fuji": "hardhat run scripts/deploy-fuji.js --network fuji",
+    "deploy:l1": "hardhat run scripts/deploy-l1.js --network farml1",
+    "link:fuji": "hardhat run scripts/link.js --network fuji",
+    "link:l1": "hardhat run scripts/link.js --network farml1",
+    "deploy": "npm run deploy:fuji && npm run deploy:l1 && npm run link:fuji && npm run link:l1",
+    "smoke": "node scripts/smoke.js",
+    "butler:demo": "hardhat run scripts/butler-demo.js --network fuji",
+    "local": "node scripts/dev-server.js"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+    "@openzeppelin/contracts": "^5.0.2",
+    "chai": "^4.5.0",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.22.17"
+  },
+  "private": true
+}

@@ -1,0 +1,119 @@
+# Deploy lên Avalanche: Fuji C-Chain + Game L1 + ICM Relayer
+
+Kiến trúc:
+
+```
+ Game L1 (Farm L1)                         Fuji C-Chain
+ ┌────────────────────┐   ICM / Teleporter  ┌───────────────────────┐
+ │ FarmLand           │ ── PLANT ─────────▶ │ FarmVault             │
+ │  plots, crops,     │ ◀──── PLANTED ───── │  khóa USDC theo tier  │
+ │  points, steal     │ ── HARVEST ───────▶ │  trả gốc + lãi        │
+ │  (gas ≈ 0)         │ ◀─── HARVESTED ──── │  quỹ thưởng tài trợ   │
+ └────────────────────┘        ▲            │ ButlerAccount (agent) │
+                               │            │ MockUSDC (faucet)     │
+                        ICM Relayer         └───────────────────────┘
+                     (Builder Console)
+```
+
+TeleporterMessenger có cùng địa chỉ `0x253b2784c75e510dD0fF1da844684a1aC0aa5fcf` trên mọi chain. Fuji đã có sẵn; L1 của mình phải deploy thêm. Relayer là dịch vụ off-chain: nếu không chạy relayer, thư được gửi đi nhưng không bao giờ tới nơi.
+
+## 0. Chạy thử offline trước (không cần testnet)
+
+```bash
+cd contracts
+npm install
+npm test
+npm run local
+```
+
+Mở `http://localhost:8790/?wallet=dev`. Lệnh này chạy một Hardhat node, deploy toàn bộ contract, một relayer giả lập chuyển thư ICM mỗi 2 giây, và một ví dev không cần MetaMask. Bỏ `?wallet=dev` nếu muốn dùng MetaMask/Core trỏ vào `http://127.0.0.1:8545` (chainId 31337).
+
+## 1. Tạo ví deploy (chỉ dùng cho testnet)
+
+```bash
+cd contracts
+npm run wallet
+```
+
+Lệnh này in ra **Deployer address** và **Agent address**, khóa được lưu vào `contracts/.env` (đã gitignore). Không bao giờ dùng ví này cho tiền thật.
+
+## 2. Lấy AVAX test trên Fuji
+
+Builder Console → **Testnet Faucet**: gửi Fuji AVAX tới Deployer address. Khoảng 1–2 AVAX là đủ cho toàn bộ deploy và demo.
+
+## 3. Tạo Game L1
+
+Builder Console → **Create L1** (đăng nhập bằng tài khoản Builder Hub):
+
+- Tên: `Farm L1`, token gas: `FARM`, chọn một chainId chưa ai dùng.
+- Ở phần genesis / phân bổ token: thêm **Deployer address** với một lượng FARM lớn để trả gas.
+- Bật ICM nếu có tuỳ chọn. Nếu không, sau khi tạo xong vào **Cross-Chain → ICM Setup** để deploy **TeleporterMessenger** và **TeleporterRegistry** lên L1.
+- Dùng **Testnet Infrastructure → Testnet Nodes** nếu cần node được quản lý. Ghi lại **RPC URL** và **chainId** từ **My L1 Dashboard**.
+
+## 4. Bật ICM Relayer
+
+Builder Console → **Testnet Infrastructure → ICM Relayer**:
+
+- Chọn hai chain: **Fuji C-Chain** và **Farm L1**, chiều relay **cả hai hướng**.
+- Nếu console yêu cầu, nạp gas cho địa chỉ relayer trên cả hai chain (AVAX trên Fuji, FARM trên L1).
+
+## 5. Điền `.env`
+
+```
+L1_RPC_URL=<RPC URL từ My L1 Dashboard>
+L1_CHAIN_ID=<chainId của Farm L1>
+L1_NAME=Farm L1
+L1_TOKEN_SYMBOL=FARM
+DAY_LENGTH=60
+```
+
+`DAY_LENGTH=60` nghĩa là 1 ngày game = 60 giây: cây ớt (7 ngày) chín sau 7 phút, vừa đủ để demo trước giám khảo.
+
+## 6. Deploy và nối hai chain
+
+```bash
+npm run deploy
+```
+
+Lệnh này lần lượt:
+
+1. `deploy:fuji`: MockUSDC, FarmVault (nạp 50.000 USDC vào quỹ thưởng), ButlerAccount với các rule.
+2. `deploy:l1`: FarmLand. Script dừng lại báo lỗi nếu TeleporterMessenger chưa có trên L1.
+3. `link:fuji` và `link:l1`: ghép FarmVault ↔ FarmLand bằng blockchainID đọc từ Warp precompile, rồi sinh `prototype/chain-config.js`.
+
+Địa chỉ được lưu ở `contracts/deployments/fuji.json` và `farml1.json`.
+
+## 7. Kiểm tra end-to-end
+
+```bash
+npm run smoke
+```
+
+Script trồng 1 cây ớt trên L1 và chờ biên nhận ICM từ C-Chain (tối đa 3 phút). Nếu hết giờ, kiểm tra lại relayer ở bước 4.
+
+```bash
+npm run butler:demo
+```
+
+Quản gia AI gửi tiền vào Ruộng rau trong hạn mức. Sau đó thử một lệnh bị prompt injection, chuyển hết USDC ra ngoài, và bị `ButlerAccount` revert ngay trên Fuji.
+
+## 8. Chơi trên testnet
+
+Mở `prototype/index.html` qua một static server, ví dụ GitHub Pages hoặc `npx serve prototype`. Bấm **Kết nối ví** (Core hoặc MetaMask). Ví sẽ tự thêm Fuji và Farm L1 nếu chưa có.
+
+- **Ruộng rau**: deposit, claim, withdraw thật trên Fuji.
+- **Vườn cây**: trồng trên L1, thư ICM sang Fuji khóa USDC, biên nhận về L1. Có thêm tưới, nhổ sớm, thu hoạch.
+- **Vườn hàng xóm**: gom điểm, thuê người giữ vườn, hái trộm điểm của địa chỉ bạn bè trên L1.
+- Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn chạy mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
+
+## Đối chiếu yêu cầu chương trình (topic 11, DeFi Farm)
+
+| Yêu cầu MVP | Trong repo |
+|---|---|
+| Game L1 dựng bằng Avalanche tooling: plot, crop, lớn theo thời gian | `FarmLand.sol` trên Farm L1 tạo từ Builder Console |
+| Vault trên C-Chain với 3 tier khóa (mock yield) | `FarmVault.sol`: 7 / 30 / 90 ngày, 6 / 9 / 14%, quỹ thưởng tài trợ |
+| Một luồng ICM: trồng trên L1 → deposit trên C-Chain, thu hoạch → claim yield | PLANT / PLANTED, HARVEST / HARVESTED, hai chiều, có test |
+| Frontend game 2D + dev toggle nén thời gian | `prototype/`, `DAY_LENGTH` |
+| Chạy trên Avalanche (L1 riêng, Fuji hoặc C-Chain) | Fuji C-Chain + Farm L1 |
+| Demo được | `npm run local` (offline) và testnet |
+| Bonus | ButlerAccount (agent guardrail, kill switch), tưới / streak / trộm điểm trên L1 |
