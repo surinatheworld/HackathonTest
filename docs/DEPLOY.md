@@ -135,6 +135,27 @@ Mở `index.html` qua GitHub Pages (Settings → Pages → nhánh `main`, thư m
 - **Vườn hàng xóm**: gom điểm, thuê người giữ vườn, hái trộm điểm của địa chỉ bạn bè trên L1.
 - Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn chạy mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
 
+## Relayer: dùng relayer của nhóm, không dùng relayer managed
+
+Thực tế trên testnet (16/10/2026):
+- Cả 3 relayer managed tạo trên Builder Console đều báo **Unreachable** và không chuyển thư nào.
+- Node managed của Farm L1 v2 **ngừng ra block** khi mempool có giao dịch mang thư Warp từ Fuji. Thay giao dịch đó bằng giao dịch thường thì chain chạy lại ngay.
+
+Vì vậy thiết kế được chỉnh như sau:
+- **FarmLand chạy optimistic**: trồng, thu hoạch hay nhổ đều cập nhật trên L1 ngay, rồi gửi **một thư ICM L1 → C-Chain**.
+- **FarmVault là nguồn sự thật về tiền.** Game đọc trạng thái khóa trực tiếp trên Fuji. Biên nhận C-Chain → L1 mặc định tắt (`setReceiptsEnabled`).
+- **Lối thoát**: `claimLock` / `exitLock` cho chủ cây rút thẳng trên Fuji nếu thư bị lạc.
+- **Đổi L1 không phải deploy lại Fuji**: owner gọi lại `setRemote`.
+
+Chạy relayer của nhóm (cần ví trong `.env` có AVAX trên Fuji và token gas trên L1):
+
+```bash
+cd contracts
+FUJI_RPC_URL=https://avalanche-fuji-c-chain-rpc.publicnode.com npm run relayer
+```
+
+Relayer đọc thư Teleporter trên L1, xin chữ ký qua dịch vụ gom chữ ký công khai của Avalanche (Glacier), rồi gọi `receiveCrossChainMessage` trên Fuji, kèm thư Warp đã ký trong access list. Chiều ngược lại chỉ bật khi đặt `RELAYER_C_TO_L1=1`. Lần chạy đầu tiên trên Fuji, relayer đã chuyển thành công thư trồng cây #1: [tx](https://testnet.snowtrace.io/tx/0xd79167ab71bba9c75a3c84c48436939aefa21df443a7143a96f5e0d0d89235a0).
+
 ## Kiểm tra trên bản fork của Fuji
 
 ```bash

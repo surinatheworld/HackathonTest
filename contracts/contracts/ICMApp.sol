@@ -51,7 +51,6 @@ abstract contract ICMApp is ITeleporterReceiver {
     error NotOwner();
     error NotTeleporter();
     error UnknownSender();
-    error RemoteAlreadySet();
     error RemoteNotSet();
 
     modifier onlyOwner() {
@@ -64,8 +63,10 @@ abstract contract ICMApp is ITeleporterReceiver {
         owner = msg.sender;
     }
 
+    /// The owner may re-point to a new remote: managed testnet L1s expire after a few days, and the
+    /// C-Chain side should survive moving the game to a fresh L1.
     function setRemote(bytes32 chainID, address remote) external onlyOwner {
-        if (remoteAddress != address(0)) revert RemoteAlreadySet();
+        if (remote == address(0)) revert RemoteNotSet();
         remoteChainID = chainID;
         remoteAddress = remote;
         emit RemoteSet(chainID, remote);

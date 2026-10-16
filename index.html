@@ -517,7 +517,7 @@ const LIVE={
   home:{
     stats:()=>{const d=CH.data;if(!d)return '<p class="note">Đang đọc dữ liệu từ chain…</p>';
       return kv([['Ví',short(CH.account)],['USDC trên Fuji',usd(d.usdc)],['AVAX trên Fuji',nf(d.avax,3)],...(CH.hasL1?[['Gas trên '+esc(CH.cfg.l1.name),nf(d.l1gas,3)+' '+esc(CH.cfg.l1.currency)]]:[['Game L1','Chưa nối']]),
-        ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing'||c.status==='Pending').length+' cây đang trồng'],['Điểm mùa (L1)',nf(d.farmer.points,0)]])+
+        ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing').length+' cây đang trồng'],['Điểm mùa (L1)',nf(d.farmer.points,0)]])+
         (CH.hasL1?'':'<p class="note warn">Mới deploy Fuji: Ruộng rau đã on-chain. Vườn cây và Vườn hàng xóm cần Game L1 (deploy.html, bước 3–4).</p>')+`<p class="note">${liveTag} Ruộng rau, Vườn cây và Vườn hàng xóm dùng contract thật trên Fuji và ${esc(CH.hasL1?CH.cfg.l1.name:'Game L1')}. Ao cá, Chợ phiên, Hợp tác xã và Quản gia vẫn chạy mô phỏng. 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
     actions:()=>PANELS.home.actions()
   },
@@ -529,23 +529,26 @@ const LIVE={
   },
   orchard:{
     stats:()=>{const d=CH.data;if(!d)return '';const now=Date.now()/1000,L=CH.cfg.dayLength;
-      const list=[...d.crops].reverse().filter((c,i)=>['Pending','Growing','Harvesting'].includes(c.status)||i<4);
-      const items=list.map(c=>{const t=TIERS[c.days],ready=c.plantedAt+c.days*L,ripeNow=c.status==='Growing'&&now>=ready,watered=c.lastWateredDay===d.today;
+      const list=[...d.crops].reverse().filter((c,i)=>c.status==='Growing'||c.lock.open||i<4);
+      const items=list.map(c=>{const t=TIERS[c.days],ready=c.plantedAt+(c.days+2)*L,ripeNow=c.status==='Growing'&&now>=ready,watered=c.lastWateredDay===d.today,k=c.lock;
+        const lockTag=k.open?'<span class="ok">Đã khóa trên C-Chain</span>':k.exists?'<span class="ok">C-Chain đã trả tiền</span>':'<span class="warn">Đang chờ thư ICM sang C-Chain…</span>';
         let line='',btns='',barH='';
-        if(c.status==='Pending')line='<span class="warn">Đang chờ biên nhận ICM từ C-Chain…</span>';
-        else if(c.status==='Harvesting')line='<span class="warn">Đang chờ C-Chain trả tiền qua ICM…</span>';
-        else if(c.status==='Harvested')line=`<span class="ok">Đã thu hoạch: ${usd(c.payout,4)}</span>`;
-        else if(c.status==='Uprooted')line=`Đã nhổ sớm, nhận lại ${usd(c.payout,2)}`;
+        if(c.status==='Harvested'||c.status==='Uprooted'){
+          const verb=c.status==='Harvested'?'Đã thu hoạch':'Đã nhổ sớm';
+          if(k.open){line=`${verb} · <span class="warn">chờ C-Chain trả tiền qua ICM…</span>`;
+            btns=c.status==='Harvested'?(k.ripe?`<button class="btn" data-act="c-claim" data-arg="${c.id}">Tự rút trên Fuji</button>`:''):`<button class="btn" data-act="c-exit" data-arg="${c.id}">Tự rút gốc trên Fuji</button>`}
+          else if(k.exists)line=`<span class="ok">${verb}, C-Chain đã trả tiền</span>`;
+          else line=`${verb} · <span class="dim">không có tiền khóa trên C-Chain</span>`}
         else if(c.status==='Failed')line='<span class="bad">Thất bại: ví chưa đủ USDC hoặc chưa cho phép trên Fuji</span>';
-        else{line=ripeNow?'<span class="ok">Đã chín</span>':`Còn ${nf(Math.max(0,ready-now)/60,1)} phút`;
+        else{line=(ripeNow?'<span class="ok">Đã chín</span>':`Còn ${nf(Math.max(0,ready-now)/60,1)} phút`)+' · '+lockTag;
           btns=ripeNow?`<button class="btn primary" data-act="c-harvest" data-arg="${c.id}">Thu hoạch</button>`:
             `<div class="row" style="flex-wrap:nowrap"><button class="btn" data-act="c-water" data-arg="${c.id}" ${watered?'disabled':''}>${watered?'Đã tưới':'Tưới'}</button><button class="btn danger" data-act="c-uproot" data-arg="${c.id}">Nhổ</button></div>`;
-          barH=bar(Math.min(1,(now-c.plantedAt)/(c.days*L)),ripeNow?'#f2c14e':'#86d36f')}
+          barH=bar(Math.min(1,(now-c.plantedAt)/((c.days+2)*L)),ripeNow?'#f2c14e':'#86d36f')}
         return `<div class="item"><div><b>#${c.id} ${t.name}</b> <small>· ${usd(c.amount,0)} · ${nf(t.apy*100,0)}%</small><br><small>${line}</small></div>${btns||'<span></span>'}${barH}</div>`}).join('');
       return busyLine()+`<div class="list">${items||'<p class="note">Chưa có cây nào trên chain. Chọn loại cây bên dưới để trồng.</p>'}</div>`},
     actions:()=>`<p class="label">Trồng cây mới</p>${field('amt-orchard','USDC','10')}
       <div class="tiers">${Object.entries(TIERS).map(([d,t])=>`<button class="tier" data-act="c-plant" data-arg="${d}"><b>${t.name}</b><small>${d} ngày game · ${nf(d*CH.cfg.dayLength/60,0)} phút</small><em>${nf(t.apy*100,0)}%/năm</em></button>`).join('')}</div>
-      <p class="note">${liveTag} Trồng cây gồm 2 bước: cho phép FarmVault dùng USDC trên Fuji (chỉ lần đầu), rồi gửi lệnh trồng trên Game L1. Một lá thư ICM mang lệnh sang C-Chain để khóa USDC và mang biên nhận về.</p>`
+      <p class="note">${liveTag} Trồng cây gồm 2 bước: cho phép FarmVault dùng USDC trên Fuji (chỉ lần đầu), rồi gửi lệnh trồng trên Game L1. Cây mọc ngay trên L1, còn một lá thư ICM mang lệnh sang C-Chain để khóa USDC thật. Trạng thái tiền luôn đọc trực tiếp từ C-Chain. Cây chín sau số ngày game cộng 2 ngày chờ thư ICM.</p>`
   },
   neighbor:{
     stats:()=>{const d=CH.data;if(!d)return '';const f=d.farmer;
@@ -564,9 +567,11 @@ Object.assign(ACT,{
   'c-lend-claim'(){cAct(CH.lendClaim().then(r=>icm('lend','C-Chain',`claim() · tx ${short(r.hash)}`)),'Đã thu lãi.')},
   'c-lend-out'(){const v=CH.data?.lendPrincipal||0;if(!v)return toast('Ruộng đang trống.');cAct(CH.lendWithdraw(v).then(r=>icm('lend','C-Chain',`withdraw(${usd(v)}) · tx ${short(r.hash)}`)),'Đã rút khỏi ruộng rau.')},
   'c-plant'(arg){const v=amt('amt-orchard');if(!v)return;const tier={7:0,30:1,90:2}[arg];
-    cAct(CH.plant(tier,v).then(r=>{icm('orchard','L1 → C-Chain',`plant(${TIERS[arg].name}, ${usd(v)}) · thư ICM đã gửi · tx ${short(r.hash)}`);floatZ('orchard','Gieo '+TIERS[arg].name)}),'Đã gửi lệnh trồng. Chờ biên nhận ICM từ C-Chain.')},
+    cAct(CH.plant(tier,v).then(r=>{icm('orchard','L1 → C-Chain',`plant(${TIERS[arg].name}, ${usd(v)}) · thư ICM đã gửi · tx ${short(r.hash)}`);floatZ('orchard','Gieo '+TIERS[arg].name)}),'Đã trồng trên L1. Thư ICM đang mang lệnh khóa USDC sang C-Chain.')},
   'c-harvest'(id){cAct(CH.harvest(Number(id)).then(r=>icm('orchard','L1 → C-Chain',`harvest(#${id}) · tx ${short(r.hash)}`)),'Đã gửi lệnh thu hoạch qua ICM.')},
   'c-uproot'(id){cAct(CH.uproot(Number(id)).then(r=>icm('orchard','L1 → C-Chain',`uproot(#${id}) · tx ${short(r.hash)}`)),'Đã gửi lệnh nhổ sớm.')},
+  'c-claim'(id){cAct(CH.claimLock(Number(id)).then(r=>icm('orchard','C-Chain',`claimLock(#${id}) · tx ${short(r.hash)}`)),'Đã rút gốc + lãi trực tiếp trên Fuji.')},
+  'c-exit'(id){cAct(CH.exitLock(Number(id)).then(r=>icm('orchard','C-Chain',`exitLock(#${id}) · tx ${short(r.hash)}`)),'Đã rút gốc trực tiếp trên Fuji.')},
   'c-water'(id){cAct(CH.water(Number(id)).then(()=>floatZ('orchard','Tưới #'+id,'#6cbde0')),'Đã tưới cây trên Game L1.')},
   'c-collect'(){cAct(CH.collect(),'Đã gom điểm mùa.')},
   'c-guard'(arg){cAct(CH.setGuard(arg==='1'))},
@@ -590,17 +595,16 @@ CH.on?.(()=>{
   st.day=Date.now()/1000/CH.cfg.dayLength;
   st.lend={p:d.lendPrincipal,acc:d.lendPending};
   st.points=d.farmer.points;
-  st.locks=d.crops.filter(c=>['Pending','Growing','Harvesting'].includes(c.status)).slice(-SPOTS.length)
-    .map(c=>({id:c.id,amt:c.amount,days:c.days,apy:TIERS[c.days].apy,start:c.status==='Pending'?st.day:c.plantedAt/CH.cfg.dayLength}));
-  for(const c of d.crops){const p=prevStatus[c.id];
-    if(p&&p!==c.status){
-      if(c.status==='Growing'&&p==='Pending'){icm('orchard','C-Chain → L1',`Biên nhận ICM: cây #${c.id} đã khóa ${usd(c.amount)} trên C-Chain`);floatZ('orchard','#'+c.id+' bén rễ','#86d36f')}
-      else if(c.status==='Harvested'){icm('orchard','C-Chain → L1',`Biên nhận ICM: cây #${c.id} thu hoạch, nhận ${usd(c.payout,4)}`);floatZ('orchard','+'+nf(c.payout,2)+' USDC','#86d36f')}
-      else if(c.status==='Uprooted'){icm('orchard','C-Chain → L1',`Biên nhận ICM: cây #${c.id} nhổ sớm, trả ${usd(c.payout)}`)}
-      else if(c.status==='Failed'){icm('orchard','C-Chain → L1',`Cây #${c.id} thất bại: C-Chain không kéo được USDC`);toast('Cây #'+c.id+' thất bại: kiểm tra số dư USDC và quyền cho phép trên Fuji.')}
-      else if(c.status==='Growing'&&p==='Harvesting')toast('C-Chain báo cây #'+c.id+' chưa chín, thử lại sau ít giây.');
+  // Trees grow on the L1 clock; the extra 2 settle days keep the C-Chain lock ripe first.
+  st.locks=d.crops.filter(c=>c.status==='Growing').slice(-SPOTS.length)
+    .map(c=>({id:c.id,amt:c.amount,days:c.days,apy:TIERS[c.days].apy,start:c.plantedAt/CH.cfg.dayLength+2}));
+  for(const c of d.crops){const p=prevStatus[c.id],k=c.lock,key=c.status+'|'+(k.open?'open':k.exists?'closed':'none');
+    if(p&&p!==key){
+      if(k.open&&p.endsWith('|none')){icm('orchard','C-Chain',`ICM đã tới: FarmVault khóa ${usd(c.amount)} cho cây #${c.id}`);floatZ('orchard','#'+c.id+' đã khóa','#86d36f')}
+      else if(!k.open&&k.exists&&p.endsWith('|open')){icm('orchard','C-Chain',`ICM đã tới: FarmVault trả tiền cây #${c.id}`);floatZ('orchard','USDC về ví','#86d36f')}
+      else if(c.status==='Failed')toast('Cây #'+c.id+' thất bại: kiểm tra số dư USDC và quyền cho phép trên Fuji.');
     }
-    prevStatus[c.id]=c.status}
+    prevStatus[c.id]=key}
   renderHud();renderStats();
 });
 $('#b-wallet').onclick=async()=>{
@@ -807,7 +811,7 @@ function lettuce(g,x,y,s){
 function tree(g,x,y,l){
   const X=x*T,Y=y*T;
   if(!l){g.fillStyle='#7a4f2c';ell(g,X,Y,9,4);g.fillStyle='#6b4226';ell(g,X,Y-1,6,2.5);return}
-  const pr=Math.min(1,(st.day-l.start)/l.days),sz=.4+.6*pr,r=ripe(l);
+  const pr=Math.max(0,Math.min(1,(st.day-l.start)/l.days)),sz=.4+.6*pr,r=ripe(l);
   const canopy={7:'#4f9e3d',30:'#3d8a36',90:'#2c7439'}[l.days];
   g.fillStyle='rgba(0,0,0,.22)';ell(g,X,Y+2,16*sz+4,5);
   g.fillStyle='#6b4226';g.fillRect(X-3,Y-18*sz,6,18*sz);

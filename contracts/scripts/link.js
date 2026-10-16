@@ -18,14 +18,12 @@ async function main() {
     [remoteID, remote] = [fuji.blockchainID, fuji.vault];
   } else throw new Error("Chạy với --network fuji hoặc --network farml1");
 
-  const current = await app.remoteAddress();
-  if (current === ethers.ZeroAddress) {
-    await (await app.setRemote(remoteID, remote)).wait();
-    console.log(`${network.name}: paired with ${remote} on ${remoteID}`);
-  } else if (current.toLowerCase() === remote.toLowerCase()) {
+  const same = (await app.remoteAddress()).toLowerCase() === remote.toLowerCase() && (await app.remoteChainID()) === remoteID;
+  if (same) {
     console.log(`${network.name}: already paired`);
   } else {
-    throw new Error(`${network.name}: already paired with a different contract (${current}). Redeploy to change it.`);
+    await (await app.setRemote(remoteID, remote)).wait();
+    console.log(`${network.name}: paired with ${remote} on ${remoteID}`);
   }
 
   const out = writeFrontendConfig();

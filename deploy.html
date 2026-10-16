@@ -291,7 +291,8 @@ $("#b-link").onclick = () => guard("l-link", async () => {
   await step("l-link", "Fuji: FarmVault.setRemote(L1, FarmLand)", k.fuji, async () => {
     const s = await switchTo(FUJI);
     const v = new E.Contract(f.vault, A.FarmVault.abi, s);
-    if ((await v.remoteAddress()) === E.ZeroAddress) await (await v.setRemote(l.blockchainID, l.land)).wait();
+    const same = (await v.remoteAddress()).toLowerCase() === l.land.toLowerCase() && (await v.remoteChainID()) === l.blockchainID;
+    if (!same) await (await v.setRemote(l.blockchainID, l.land)).wait(); // also re-points to a new L1
     k.fuji = true; save();
   });
   // Vaults deployed before the gas fix start at 400k; ICM receipts need more headroom.
@@ -304,7 +305,8 @@ $("#b-link").onclick = () => guard("l-link", async () => {
   await step("l-link", "L1: FarmLand.setRemote(Fuji, FarmVault)", k.l1, async () => {
     const s = await switchTo(l);
     const c = new E.Contract(l.land, A.FarmLand.abi, s);
-    if ((await c.remoteAddress()) === E.ZeroAddress) await (await c.setRemote(f.blockchainID, f.vault)).wait();
+    const same = (await c.remoteAddress()).toLowerCase() === f.vault.toLowerCase() && (await c.remoteChainID()) === f.blockchainID;
+    if (!same) await (await c.setRemote(f.blockchainID, f.vault)).wait();
     k.l1 = true; save();
   });
   await step("l-link", "L1: requiredGasLimit ≥ 1.000.000", k.gasL1, async () => {

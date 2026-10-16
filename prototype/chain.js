@@ -18,6 +18,10 @@
       "function pendingYield(address) view returns (uint256)",
       "function lends(address) view returns (uint256 principal, uint256 accrued, uint64 last)",
       "function rewardReserve() view returns (uint256)",
+      "function locks(uint256) view returns (address user, uint8 tier, bool open, uint64 start, uint256 amount)",
+      "function isRipe(uint256) view returns (bool)",
+      "function claimLock(uint256 cropId)",
+      "function exitLock(uint256 cropId)",
     ],
     land: [
       "function plant(uint8 tier, uint256 amount) returns (uint256)",
@@ -142,6 +146,10 @@
       landR ? landR.today() : 0n,
       rl ? rl.getBalance(a) : 0n,
     ]);
+    // FarmVault on C-Chain is the source of truth for money; the L1 crop state is optimistic.
+    const ids = crops.ids.map(Number);
+    const lockList = await Promise.all(ids.map((id) => vaultR.locks(id).catch(() => null)));
+    const ripeList = await Promise.all(ids.map((id, i) => (lockList[i]?.open ? vaultR.isRipe(id).catch(() => false) : false)));
     CH.data = {
       usdc: toNum(usdc),
       avax: Number(E.formatEther(avax)),
@@ -167,6 +175,9 @@
           lastWateredDay: Number(c.lastWateredDay),
           amount: toNum(c.amount),
           payout: toNum(c.payout),
+          lock: lockList[i]
+            ? { exists: Number(lockList[i].start) > 0, open: lockList[i].open, start: Number(lockList[i].start), ripe: ripeList[i] }
+            : { exists: false, open: false, start: 0, ripe: false },
         };
       }),
     };
@@ -187,6 +198,9 @@
   const landTx = (label, fn) => run(label, "l1", (s) => fn(new E.Contract(cfg.l1.land, ABI.land, s)));
   CH.harvest = (id) => landTx(`Thu hoạch cây #${id}`, (c) => c.harvest(id));
   CH.uproot = (id) => landTx(`Nhổ sớm cây #${id}`, (c) => c.uproot(id));
+  const vaultTx = (label, fn) => run(label, "cchain", (s) => fn(new E.Contract(cfg.cchain.vault, ABI.vault, s)));
+  CH.claimLock = (id) => vaultTx(`Rút cây #${id} trực tiếp trên Fuji`, (c) => c.claimLock(id));
+  CH.exitLock = (id) => vaultTx(`Rút gốc cây #${id} trên Fuji`, (c) => c.exitLock(id));
   CH.water = (id) => landTx(`Tưới cây #${id}`, (c) => c.water(id));
   CH.collect = () => landTx("Gom điểm mùa", (c) => c.collect());
   CH.steal = (addr) => landTx("Hái trộm vườn hàng xóm", (c) => c.steal(E.getAddress(addr)));

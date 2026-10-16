@@ -4,14 +4,20 @@ pragma solidity ^0.8.24;
 import {ICMApp, FarmMsg} from "../ICMApp.sol";
 
 /// Game L1 side of Nông Trại DeFi. Holds game state only, never money.
-///  - plant / harvest / uproot send an ICM message to FarmVault on C-Chain and wait for a receipt.
-///  - water, collect and steal are dense, gas-free-ish game actions that stay on the L1.
+///
+/// Crops are optimistic: plant / harvest / uproot update the game state at once and send one ICM
+/// message (L1 → C-Chain) that makes FarmVault lock or pay the real USDC. FarmVault is the source of
+/// truth for money, and the game UI reads it directly. Receipts back from C-Chain are optional: if a
+/// relayer delivers them, they reconcile the game state (e.g. a plant that could not pull USDC).
+/// This keeps the game playable on L1s whose nodes cannot verify C-Chain → L1 Warp messages.
+///
+/// water, collect and steal are dense, near-free game actions that stay on the L1.
 contract FarmLand is ICMApp {
     enum Status {
         None,
-        Pending, // PLANT sent, waiting for C-Chain receipt
+        Pending, // unused since optimistic crops; kept so status codes stay stable
         Growing,
-        Harvesting, // HARVEST or UPROOT sent, waiting for receipt
+        Harvesting, // unused, see above
         Harvested,
         Uprooted,
         Failed
@@ -38,6 +44,9 @@ contract FarmLand is ICMApp {
     }
 
     uint16 public constant MAX_ACTIVE_CROPS = 12;
+    /// Extra game days a crop waits on the L1 before harvest, so the C-Chain lock (which starts when
+    /// the ICM message lands) is ripe by the time the HARVEST message arrives.
+    uint256 public constant SETTLE_DAYS = 2;
     uint256 public immutable dayLength;
     uint256 public nextCropId = 1;
 
@@ -75,7 +84,12 @@ contract FarmLand is ICMApp {
         return uint64(block.timestamp / dayLength);
     }
 
-    // ---------- crops (cross-chain) ----------
+    function readyAt(uint256 cropId) public view returns (uint256) {
+        Crop memory c = crops[cropId];
+        return c.plantedAt == 0 ? 0 : c.plantedAt + (tierDays(c.tier) + SETTLE_DAYS) * dayLength;
+    }
+
+    // ---------- crops (L1 → C-Chain over ICM) ----------
 
     /// Before planting, approve FarmVault for `amount` USDC on C-Chain with the same address.
     function plant(uint8 tier, uint256 amount) external returns (uint256 cropId) {
@@ -88,52 +102,47 @@ contract FarmLand is ICMApp {
         crops[cropId] = Crop({
             owner: msg.sender,
             tier: tier,
-            status: Status.Pending,
-            plantedAt: 0,
+            status: Status.Growing,
+            plantedAt: uint64(block.timestamp),
             lastWateredDay: 0,
             amount: amount,
             payout: 0
         });
         _cropsOf[msg.sender].push(cropId);
         emit Planted(cropId, msg.sender, tier, amount);
+        emit CropStatus(cropId, Status.Growing, 0);
         _send(FarmMsg.PLANT, cropId, msg.sender, tier, amount);
     }
 
     function harvest(uint256 cropId) external {
         Crop storage c = _own(cropId, Status.Growing);
-        uint256 ripeAt = c.plantedAt + tierDays(c.tier) * dayLength;
+        uint256 ripeAt = readyAt(cropId);
         if (block.timestamp < ripeAt) revert NotRipe(ripeAt);
-        _setStatus(cropId, Status.Harvesting, 0);
+        _close(cropId, Status.Harvested);
+        farmers[msg.sender].points += c.amount / 1e6; // 1 season point per USDC grown to term
         _send(FarmMsg.HARVEST, cropId, msg.sender, c.tier, c.amount);
     }
 
-    /// Pull the crop early: principal comes back, all yield is lost.
+    /// Pull the crop early: FarmVault returns the principal, all yield is lost.
     function uproot(uint256 cropId) external {
         Crop storage c = _own(cropId, Status.Growing);
-        _setStatus(cropId, Status.Harvesting, 0);
+        _close(cropId, Status.Uprooted);
         _send(FarmMsg.UPROOT, cropId, msg.sender, c.tier, c.amount);
     }
 
+    /// Optional receipts from FarmVault. Only reconcile; never required for the game to move on.
     function _handle(bytes calldata message) internal override {
         (uint8 kind, uint256 cropId,,, uint256 amount) = FarmMsg.decode(message);
         Crop storage c = crops[cropId];
         if (c.owner == address(0)) return;
-        if (kind == FarmMsg.PLANTED && c.status == Status.Pending) {
-            c.plantedAt = uint64(block.timestamp);
-            _setStatus(cropId, Status.Growing, 0);
-        } else if (kind == FarmMsg.PLANT_FAILED && c.status == Status.Pending) {
-            farmers[c.owner].activeCrops--;
-            _setStatus(cropId, Status.Failed, 0);
-        } else if (kind == FarmMsg.HARVESTED && c.status == Status.Harvesting) {
-            farmers[c.owner].activeCrops--;
-            farmers[c.owner].points += amount / 1e6; // 1 season point per USDC harvested
-            _setStatus(cropId, Status.Harvested, amount);
-        } else if (kind == FarmMsg.UPROOTED && c.status == Status.Harvesting) {
-            farmers[c.owner].activeCrops--;
-            _setStatus(cropId, Status.Uprooted, amount);
-        } else if (kind == FarmMsg.HARVEST_FAILED && c.status == Status.Harvesting) {
-            _setStatus(cropId, Status.Growing, 0);
+        if (kind == FarmMsg.PLANT_FAILED && c.status == Status.Growing) {
+            _close(cropId, Status.Failed);
+        } else if ((kind == FarmMsg.HARVESTED || kind == FarmMsg.UPROOTED) && amount != 0) {
+            c.payout = amount;
+            emit CropStatus(cropId, c.status, amount);
         }
+        // HARVEST_FAILED needs no action: the lock stays open on C-Chain and the owner can claim it
+        // there with FarmVault.claimLock.
     }
 
     // ---------- daily game loop (L1 only) ----------
@@ -191,11 +200,6 @@ contract FarmLand is ICMApp {
         }
     }
 
-    function readyAt(uint256 cropId) external view returns (uint256) {
-        Crop memory c = crops[cropId];
-        return c.plantedAt == 0 ? 0 : c.plantedAt + tierDays(c.tier) * dayLength;
-    }
-
     // ---------- internals ----------
 
     function _own(uint256 cropId, Status need) private view returns (Crop storage c) {
@@ -204,9 +208,10 @@ contract FarmLand is ICMApp {
         if (c.status != need) revert WrongStatus(c.status);
     }
 
-    function _setStatus(uint256 cropId, Status s, uint256 payout) private {
-        crops[cropId].status = s;
-        if (payout != 0) crops[cropId].payout = payout;
-        emit CropStatus(cropId, s, payout);
+    function _close(uint256 cropId, Status s) private {
+        Crop storage c = crops[cropId];
+        c.status = s;
+        farmers[c.owner].activeCrops--;
+        emit CropStatus(cropId, s, 0);
     }
 }

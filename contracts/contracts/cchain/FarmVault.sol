@@ -7,8 +7,9 @@ import {ICMApp, FarmMsg} from "../ICMApp.sol";
 
 /// C-Chain side of Nông Trại DeFi. Holds the real USDC.
 ///  - Ruộng rau: open lending, 4% APY, withdraw any time.
-///  - Vườn cây: tiered locks (7 / 30 / 90 game days at 6 / 9 / 14% APY), opened and
-///    closed only by ICM messages from FarmLand on the Game L1.
+///  - Vườn cây: tiered locks (7 / 30 / 90 game days at 6 / 9 / 14% APY), opened and closed by ICM
+///    messages from FarmLand on the Game L1. The lock owner can also close it here directly
+///    (claimLock / exitLock), so money never depends on a message being delivered.
 /// Yield is paid from a reward reserve funded by sponsors (mock yield for the MVP).
 contract FarmVault is ICMApp {
     using SafeERC20 for IERC20;
@@ -40,6 +41,9 @@ contract FarmVault is ICMApp {
     uint256 public rewardReserve;
     uint256 public totalLent;
     uint256 public totalLocked;
+    /// Send receipts back to the L1. Off by default: some L1 nodes cannot verify C-Chain → L1 Warp
+    /// messages, and FarmLand does not need receipts to work.
+    bool public receiptsEnabled;
 
     event RewardsFunded(address indexed from, uint256 amount);
     event Deposited(address indexed user, uint256 amount);
@@ -51,6 +55,9 @@ contract FarmVault is ICMApp {
 
     error ZeroAmount();
     error InsufficientPrincipal();
+    error NotYourLock();
+    error LockClosed();
+    error LockNotRipe();
 
     constructor(address teleporter_, address usdc_, uint256 dayLength_) ICMApp(teleporter_) {
         usdc = IERC20(usdc_);
@@ -127,6 +134,27 @@ contract FarmVault is ICMApp {
         return k.open && block.timestamp >= k.start + tierDays(k.tier) * dayLength;
     }
 
+    /// Collect a ripe lock directly on C-Chain (principal + yield), e.g. if the HARVEST message was lost.
+    function claimLock(uint256 cropId) external {
+        Lock storage k = locks[cropId];
+        if (k.user != msg.sender) revert NotYourLock();
+        if (!k.open) revert LockClosed();
+        if (!isRipe(cropId)) revert LockNotRipe();
+        _payout(cropId, false);
+    }
+
+    /// Leave a lock early directly on C-Chain: principal only, yield is forfeited.
+    function exitLock(uint256 cropId) external {
+        Lock storage k = locks[cropId];
+        if (k.user != msg.sender) revert NotYourLock();
+        if (!k.open) revert LockClosed();
+        _payout(cropId, true);
+    }
+
+    function setReceiptsEnabled(bool on) external onlyOwner {
+        receiptsEnabled = on;
+    }
+
     // ---------- ICM ----------
 
     function _handle(bytes calldata message) internal override {
@@ -152,28 +180,38 @@ contract FarmVault is ICMApp {
         }
         if (reason != 0) {
             emit LockFailed(cropId, user, reason);
-            _send(FarmMsg.PLANT_FAILED, cropId, user, tier, reason);
+            _receipt(FarmMsg.PLANT_FAILED, cropId, user, tier, reason);
             return;
         }
         locks[cropId] = Lock({user: user, tier: tier, open: true, start: uint64(block.timestamp), amount: amount});
         totalLocked += amount;
         emit Locked(cropId, user, tier, amount);
-        _send(FarmMsg.PLANTED, cropId, user, tier, amount);
+        _receipt(FarmMsg.PLANTED, cropId, user, tier, amount);
     }
 
     function _harvest(uint256 cropId, address user, bool early) private {
         Lock storage k = locks[cropId];
         if (!k.open || k.user != user || (!early && !isRipe(cropId))) {
-            _send(FarmMsg.HARVEST_FAILED, cropId, user, k.tier, 0);
+            // Lock stays as it is; the owner can claimLock / exitLock here later.
+            _receipt(FarmMsg.HARVEST_FAILED, cropId, user, k.tier, 0);
             return;
         }
+        _payout(cropId, early);
+    }
+
+    function _payout(uint256 cropId, bool early) private {
+        Lock storage k = locks[cropId];
         uint256 payout = k.amount;
         if (!early) payout += _takeReward(lockYield(cropId));
         k.open = false;
         totalLocked -= k.amount;
-        usdc.safeTransfer(user, payout);
-        emit Unlocked(cropId, user, payout, early);
-        _send(early ? FarmMsg.UPROOTED : FarmMsg.HARVESTED, cropId, user, k.tier, payout);
+        usdc.safeTransfer(k.user, payout);
+        emit Unlocked(cropId, k.user, payout, early);
+        _receipt(early ? FarmMsg.UPROOTED : FarmMsg.HARVESTED, cropId, k.user, k.tier, payout);
+    }
+
+    function _receipt(uint8 kind, uint256 cropId, address user, uint8 tier, uint256 amount) private {
+        if (receiptsEnabled) _send(kind, cropId, user, tier, amount);
     }
 
     // ---------- internals ----------

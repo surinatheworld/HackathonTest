@@ -28,41 +28,50 @@ async function deploy() {
   return { owner, alice, bob, agent, attacker, tele, token, vault, land, relay };
 }
 
-describe("Vườn cây: ICM plant / harvest", () => {
-  it("plants on the L1, locks USDC on C-Chain, and harvests principal + yield", async () => {
-    const { alice, token, vault, land, relay } = await deploy();
+describe("Vườn cây: optimistic L1 + ICM to C-Chain", () => {
+  const RIPE = (tierDays) => (tierDays + 2) * DAY + 1; // + SETTLE_DAYS on the L1
+
+  it("plants on the L1 at once, locks USDC on C-Chain via ICM, harvests principal + yield", async () => {
+    const { alice, tele, token, vault, land, relay } = await deploy();
     await token.connect(alice).approve(vault, usdc(100));
     await land.connect(alice).plant(0, usdc(100)); // cây ớt, 7 days
     let [, list] = await land.cropsOf(alice);
-    expect(list[0].status).to.equal(S.Pending);
+    expect(list[0].status).to.equal(S.Growing); // no waiting for a receipt
+    expect(await token.balanceOf(alice)).to.equal(usdc(1000)); // money moves only when ICM lands
 
-    await relay(); // PLANT -> vault, PLANTED -> land
-    [, list] = await land.cropsOf(alice);
-    expect(list[0].status).to.equal(S.Growing);
+    await relay(); // PLANT -> vault
     expect(await token.balanceOf(alice)).to.equal(usdc(900));
-    expect(await vault.totalLocked()).to.equal(usdc(100));
+    expect((await vault.locks(1)).open).to.equal(true);
+    expect(await tele.pending()).to.equal(0n); // receipts are off by default
 
-    await expect(land.connect(alice).harvest(1)).to.be.revertedWithCustomError(land, "NotRipe");
     await time.increase(7 * DAY + 1);
+    await expect(land.connect(alice).harvest(1)).to.be.revertedWithCustomError(land, "NotRipe"); // settle days
+    await time.increase(2 * DAY);
     await land.connect(alice).harvest(1);
-    await relay();
-
     [, list] = await land.cropsOf(alice);
     expect(list[0].status).to.equal(S.Harvested);
+    expect((await land.farmers(alice)).points).to.equal(100n);
+    expect((await land.farmers(alice)).activeCrops).to.equal(0);
+
+    await relay(); // HARVEST -> vault pays out on C-Chain
     const expected = usdc(100) + (usdc(100) * 600n * 7n) / (10_000n * 365n);
     expect(await token.balanceOf(alice)).to.equal(usdc(900) + expected);
-    expect(list[0].payout).to.equal(expected);
-    expect((await land.farmers(alice)).points).to.equal(100n);
+    expect((await vault.locks(1)).open).to.equal(false);
   });
 
-  it("marks the crop failed when the player has not approved USDC on C-Chain", async () => {
-    const { alice, token, land, relay } = await deploy();
+  it("without USDC approval nothing is locked; with receipts on, the L1 marks the crop failed", async () => {
+    const { owner, alice, token, vault, land, relay } = await deploy();
     await land.connect(alice).plant(1, usdc(50));
     await relay();
-    const [, list] = await land.cropsOf(alice);
-    expect(list[0].status).to.equal(S.Failed);
     expect(await token.balanceOf(alice)).to.equal(usdc(1000));
-    expect((await land.farmers(alice)).activeCrops).to.equal(0);
+    expect((await vault.locks(1)).open).to.equal(false);
+
+    await vault.connect(owner).setReceiptsEnabled(true);
+    await land.connect(alice).plant(1, usdc(50));
+    await relay(); // PLANT -> vault fails, PLANT_FAILED -> land
+    const [, list] = await land.cropsOf(alice);
+    expect(list[1].status).to.equal(S.Failed);
+    expect((await land.farmers(alice)).activeCrops).to.equal(1); // only the first, optimistic one
   });
 
   it("uproot returns principal only", async () => {
@@ -76,6 +85,46 @@ describe("Vườn cây: ICM plant / harvest", () => {
     const [, list] = await land.cropsOf(alice);
     expect(list[0].status).to.equal(S.Uprooted);
     expect(await token.balanceOf(alice)).to.equal(usdc(1000));
+  });
+
+  it("claimLock lets the owner collect on C-Chain if the HARVEST message never arrives", async () => {
+    const { alice, bob, token, vault, land, relay } = await deploy();
+    await token.connect(alice).approve(vault, usdc(100));
+    await land.connect(alice).plant(0, usdc(100));
+    await relay();
+    await expect(vault.connect(alice).claimLock(1)).to.be.revertedWithCustomError(vault, "LockNotRipe");
+    await time.increase(RIPE(7));
+    await land.connect(alice).harvest(1); // message is sent but we do not relay it yet
+    await expect(vault.connect(bob).claimLock(1)).to.be.revertedWithCustomError(vault, "NotYourLock");
+    await vault.connect(alice).claimLock(1);
+    const after = await token.balanceOf(alice);
+    expect(after).to.be.gt(usdc(1000));
+    await relay(); // the late HARVEST is ignored, nothing is paid twice
+    expect(await token.balanceOf(alice)).to.equal(after);
+    await expect(vault.connect(alice).claimLock(1)).to.be.revertedWithCustomError(vault, "LockClosed");
+  });
+
+  it("exitLock returns principal early on C-Chain", async () => {
+    const { alice, token, vault, land, relay } = await deploy();
+    await token.connect(alice).approve(vault, usdc(100));
+    await land.connect(alice).plant(2, usdc(100));
+    await relay();
+    await vault.connect(alice).exitLock(1);
+    expect(await token.balanceOf(alice)).to.equal(usdc(1000));
+  });
+
+  it("with receipts on, the L1 records the payout", async () => {
+    const { owner, alice, token, vault, land, relay } = await deploy();
+    await vault.connect(owner).setReceiptsEnabled(true);
+    await token.connect(alice).approve(vault, usdc(100));
+    await land.connect(alice).plant(0, usdc(100));
+    await relay();
+    await time.increase(RIPE(7));
+    await land.connect(alice).harvest(1);
+    await relay();
+    const [, list] = await land.cropsOf(alice);
+    expect(list[0].status).to.equal(S.Harvested);
+    expect(list[0].payout).to.be.gt(usdc(100));
   });
 
   it("rejects messages that do not come from the paired contract via Teleporter", async () => {
@@ -97,24 +146,32 @@ describe("Vườn cây: ICM plant / harvest", () => {
     await token.connect(alice).approve(vault, usdc(100));
     await land.connect(alice).plant(0, usdc(100));
     await relay();
-    await time.increase(8 * DAY);
+    await time.increase(RIPE(7));
     await expect(land.connect(bob).harvest(1)).to.be.revertedWithCustomError(land, "NotYourCrop");
+  });
+
+  it("owner can re-point the vault to a new L1, nobody else can", async () => {
+    const { owner, attacker, vault } = await deploy();
+    await expect(vault.connect(attacker).setRemote(ethers.id("new-l1"), attacker.address)).to.be.revertedWithCustomError(vault, "NotOwner");
+    await vault.connect(owner).setRemote(ethers.id("new-l1"), attacker.address);
+    expect(await vault.remoteChainID()).to.equal(ethers.id("new-l1"));
+    await expect(vault.connect(owner).setRemote(ethers.id("x"), ethers.ZeroAddress)).to.be.revertedWithCustomError(vault, "RemoteNotSet");
   });
 });
 
 describe("ICM gas budget", () => {
   it("delivers every message within requiredGasLimit", async () => {
-    const { alice, token, vault, land, relay } = await deploy();
+    const { owner, alice, token, vault, land, relay } = await deploy();
     expect(await vault.requiredGasLimit()).to.equal(1_000_000n);
     expect(await land.requiredGasLimit()).to.equal(1_000_000n);
+    await vault.connect(owner).setReceiptsEnabled(true); // exercise both directions
     await token.connect(alice).approve(vault, usdc(100));
     await land.connect(alice).plant(0, usdc(100));
     await relay(); // reverts with out-of-gas if the budget is too small
-    await time.increase(7 * DAY + 1);
+    await time.increase((7 + 2) * DAY + 1);
     await land.connect(alice).harvest(1);
     await relay();
-    const [, list] = await land.cropsOf(alice);
-    expect(list[0].status).to.equal(S.Harvested);
+    expect((await vault.locks(1)).open).to.equal(false);
   });
 
   it("a too-small budget fails delivery instead of half-applying", async () => {
