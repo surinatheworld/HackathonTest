@@ -15,6 +15,15 @@ module.exports = {
     },
   },
   networks: {
+    // FORK_FUJI=1 npm run test:fork  → runs test/fork/*.js against the live Fuji deployment.
+    hardhat: process.env.FORK_FUJI
+      ? {
+          chainId: 43113,
+          forking: { url: process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc" },
+          // Hardhat only knows Ethereum's fork schedule; tell it Fuji blocks run Cancun rules.
+          chains: { 43113: { hardforkHistory: { cancun: 0 } } },
+        }
+      : {},
     fuji: {
       url: process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc",
       chainId: 43113,

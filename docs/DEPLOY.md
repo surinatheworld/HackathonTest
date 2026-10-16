@@ -135,6 +135,14 @@ Mở `index.html` qua GitHub Pages (Settings → Pages → nhánh `main`, thư m
 - **Vườn hàng xóm**: gom điểm, thuê người giữ vườn, hái trộm điểm của địa chỉ bạn bè trên L1.
 - Ao cá, Chợ phiên, Hợp tác xã và Quản gia trong game vẫn chạy mô phỏng. Contract quản gia thật được demo bằng `npm run butler:demo`.
 
+## Kiểm tra trên bản fork của Fuji
+
+```bash
+npm run test:fork
+```
+
+Lệnh này fork Fuji về máy rồi chạy thử trên **chính các contract đã deploy**: kiểm tra cấu hình, luồng cho vay (gửi, nhận lãi, rút), chỉ TeleporterMessenger thật mới được giao thông điệp, owner nâng `requiredGasLimit`, và quản gia (cấp quyền, gửi tiền trong hạn mức, các lệnh bị prompt injection bị revert, kill switch). Test giả làm ví owner nên không cần private key. Luồng ICM thì không chạy được trên fork vì Hardhat không có Warp precompile; phần đó phải thử trên Farm L1 thật.
+
 ## 9. Verify source trên Snowtrace
 
 ```bash

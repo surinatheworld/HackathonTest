@@ -16,7 +16,8 @@
     "local": "node scripts/dev-server.js",
     "export-web": "hardhat compile && node scripts/export-web.js",
     "sync-config": "node scripts/sync-config.js",
-    "verify:fuji": "hardhat run scripts/verify-fuji.js --network fuji"
+    "verify:fuji": "hardhat run scripts/verify-fuji.js --network fuji",
+    "test:fork": "node -e \"process.env.FORK_FUJI=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'test','test/fork/fuji.fork.js'],{stdio:'inherit',env:process.env})\""
   },
   "license": "MIT",
   "type": "commonjs",
