@@ -8,18 +8,20 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình t
 
 ## Đã deploy
 
-Owner của mọi contract là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 58 giây. Source đã được verify trên Snowtrace.
+Owner của mọi contract là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Script deploy bằng ví test, sau đó chuyển owner sang ví dự án (`scripts/handover.js`). Một ngày game dài 60 giây. Source trên Fuji đã được verify trên Snowtrace.
 
-| Contract | Địa chỉ |
-|---|---|
-| FarmVault | [`0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D`](https://testnet.snowtrace.io/address/0x0D5303Ee9C558f6cfCF3043b75b8018Ac841Cc7D#code) |
-| MockUSDC | [`0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b`](https://testnet.snowtrace.io/address/0x4CE7eda107424B7D6F66896c8D66C12CC8a8c74b#code) |
-| ButlerAccount | [`0xF92c04C7813cdD742Dd1a73B791658edC88EacA1`](https://testnet.snowtrace.io/address/0xF92c04C7813cdD742Dd1a73B791658edC88EacA1#code) |
-| FarmLand (Farm L1 v2, chain `384487`) | `0xD268bB5591ebFAd64c43dDF3D634376bD4AA94A5` |
+| Contract | Chain | Địa chỉ |
+|---|---|---|
+| FarmVault | Fuji C-Chain | [`0x08fF981e08406C51919a308E0C98b6236f34a75d`](https://testnet.snowtrace.io/address/0x08fF981e08406C51919a308E0C98b6236f34a75d#code) |
+| MockUSDC | Fuji C-Chain | [`0x4cCD2fb3BF5EE5F28622fc75D98bE8D4D96d6802`](https://testnet.snowtrace.io/address/0x4cCD2fb3BF5EE5F28622fc75D98bE8D4D96d6802#code) |
+| ButlerAccount | Fuji C-Chain | [`0x02bae56fc883c07842fa85D93BA4eCC6766DdD98`](https://testnet.snowtrace.io/address/0x02bae56fc883c07842fa85D93BA4eCC6766DdD98#code) |
+| FarmLand | Farm L1 v2 (`384487`) | `0x4A241A4BCf34F0FFE4ff28Cc641058CFCB87CBa8` |
 
-Farm L1 v2: blockchainID `2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE`, RPC `https://nodes-prod.43.207.73.245.sslip.io/ext/bc/2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE/rpc`. Node và relayer managed của Builder Console hết hạn sau khoảng 3 ngày.
+Farm L1 v2: blockchainID `2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE`, RPC `https://nodes-prod.43.207.73.245.sslip.io/ext/bc/2SUS4cu2V7ZzwkhNohBGbJbkqP4orFvHLkKL1Hx3AMbX9wrEiE/rpc`. Node managed của Builder Console hết hạn sau khoảng 3 ngày (19/10/2026). Đổi sang L1 mới thì owner gọi `setRemote`, không phải deploy lại Fuji.
 
-FarmVault và FarmLand đã được ghép cặp với nhau, `requiredGasLimit` 1.000.000 ở cả hai phía. Quản gia: agent `0x6fC6866A2bcD264ABd80640D72659d0336A1550c`, hạn mức 200 USDC/ngày. `npm run butler:demo` đã chạy trên Fuji: agent gửi 50 USDC ([tx](https://testnet.snowtrace.io/tx/0xa8912a591bf355fd8880c850ccbb9e30293e1d28247d1ea74206675c3ad80bd2)), còn các lệnh bị prompt injection đều revert.
+**ICM chạy thật:** trồng cây #1 trên Farm L1 v2 (tx L1 `0x6bceca36b50117fbe641a465c120d3b01e7cc4f88d2f44da82a674fdada87eec`), relayer của nhóm chuyển thư sang Fuji trong 6,9 giây, FarmVault khóa 10 USDC ([tx Fuji](https://testnet.snowtrace.io/tx/0x75626ea57a928c5c3127dc28153a2cfd27ca2d0654321ffc0b16cd69527c6023)). Relayer: `npm run relayer` (xem docs/DEPLOY.md).
+
+Bộ contract đầu tiên (FarmVault `0x0D53…Cc7D`, FarmLand `0xD268…94A5`) thuộc thiết kế cũ, cần biên nhận C-Chain → L1, nay không dùng nữa.
 
 ## Cấu trúc
 

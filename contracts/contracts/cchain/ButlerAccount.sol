@@ -51,6 +51,11 @@ contract ButlerAccount {
         emit AgentSet(agent_, dailyCap_);
     }
 
+    /// Hand the account to its real owner after a scripted setup.
+    function transferOwnership(address next) external onlyOwner {
+        owner = next;
+    }
+
     /// Kill switch.
     function revokeAgent() external onlyOwner {
         agentActive = false;

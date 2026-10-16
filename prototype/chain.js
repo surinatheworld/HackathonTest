@@ -193,18 +193,21 @@
   CH.lendWithdraw = (v) => run("Rút khỏi ruộng rau (Fuji)", "cchain", (s) => new E.Contract(cfg.cchain.vault, ABI.vault, s).withdraw(U(v)));
   CH.plant = async (tier, v) => {
     await ensureAllowance(U(v));
-    return run("Trồng cây trên Game L1", "l1", (s) => new E.Contract(cfg.l1.land, ABI.land, s).plant(tier, U(v)));
+    return run("Trồng cây trên Game L1", "l1", (s) => new E.Contract(cfg.l1.land, ABI.land, s).plant(tier, U(v), { gasLimit: L1_GAS.plant }));
   };
+  // A quiet L1 only makes blocks when there are txs, so "latest" can be minutes old and gas estimation
+  // would simulate harvest/water against a stale timestamp and fail. Fixed gas limits skip that.
+  const L1_GAS = { plant: 600_000, harvest: 500_000, uproot: 500_000, water: 150_000, small: 150_000 };
   const landTx = (label, fn) => run(label, "l1", (s) => fn(new E.Contract(cfg.l1.land, ABI.land, s)));
-  CH.harvest = (id) => landTx(`Thu hoạch cây #${id}`, (c) => c.harvest(id));
-  CH.uproot = (id) => landTx(`Nhổ sớm cây #${id}`, (c) => c.uproot(id));
+  CH.harvest = (id) => landTx(`Thu hoạch cây #${id}`, (c) => c.harvest(id, { gasLimit: L1_GAS.harvest }));
+  CH.uproot = (id) => landTx(`Nhổ sớm cây #${id}`, (c) => c.uproot(id, { gasLimit: L1_GAS.uproot }));
   const vaultTx = (label, fn) => run(label, "cchain", (s) => fn(new E.Contract(cfg.cchain.vault, ABI.vault, s)));
   CH.claimLock = (id) => vaultTx(`Rút cây #${id} trực tiếp trên Fuji`, (c) => c.claimLock(id));
   CH.exitLock = (id) => vaultTx(`Rút gốc cây #${id} trên Fuji`, (c) => c.exitLock(id));
-  CH.water = (id) => landTx(`Tưới cây #${id}`, (c) => c.water(id));
-  CH.collect = () => landTx("Gom điểm mùa", (c) => c.collect());
-  CH.steal = (addr) => landTx("Hái trộm vườn hàng xóm", (c) => c.steal(E.getAddress(addr)));
-  CH.setGuard = (b) => landTx(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", (c) => c.setGuard(b));
+  CH.water = (id) => landTx(`Tưới cây #${id}`, (c) => c.water(id, { gasLimit: L1_GAS.water }));
+  CH.collect = () => landTx("Gom điểm mùa", (c) => c.collect({ gasLimit: L1_GAS.small }));
+  CH.steal = (addr) => landTx("Hái trộm vườn hàng xóm", (c) => c.steal(E.getAddress(addr), { gasLimit: L1_GAS.small }));
+  CH.setGuard = (b) => landTx(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", (c) => c.setGuard(b, { gasLimit: L1_GAS.small }));
   CH.explorerTx = (net, hash) => (cfg[net].explorer ? `${cfg[net].explorer.replace(/\/$/, "")}/tx/${hash}` : "");
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);

@@ -1,5 +1,5 @@
 // node scripts/smoke.js
-// End-to-end check on the real networks: plant on the Game L1, wait for the ICM receipt from C-Chain.
+// End-to-end check on the real networks: plant on the Game L1, wait until FarmVault on C-Chain locks the USDC.
 require("dotenv").config();
 const { ethers } = require("ethers");
 const { load } = require("./common");
@@ -32,19 +32,16 @@ async function main() {
   console.log(`L1: planted crop #${cropId} (tx ${rc.hash}), waiting for ICM round trip…`);
 
   const t0 = Date.now();
+  const c = await land.crops(cropId);
+  console.log(`L1: crop #${cropId} is ${STATUS[Number(c.status)]} (optimistic)`);
   for (;;) {
-    const c = await land.crops(cropId);
-    const s = STATUS[Number(c.status)];
-    if (s !== "Pending") {
-      console.log(`L1: crop #${cropId} is ${s} after ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-      if (s === "Growing") {
-        const lock = await vault.locks(cropId);
-        console.log(`C-Chain: lock open=${lock.open}, amount=${ethers.formatUnits(lock.amount, 6)} USDC`);
-      }
+    const lock = await vault.locks(cropId);
+    if (lock.open) {
+      console.log(`C-Chain: FarmVault locked ${ethers.formatUnits(lock.amount, 6)} USDC for crop #${cropId} after ${((Date.now() - t0) / 1000).toFixed(1)} s ✓`);
       break;
     }
     if (Date.now() - t0 > 180_000) {
-      console.log("Hết 3 phút mà chưa có receipt. Kiểm tra ICM Relayer trong Builder Console (đúng 2 chain, đang chạy).");
+      console.log("Hết 3 phút mà C-Chain chưa khóa. Kiểm tra relayer (npm run relayer) đang chạy và có gas.");
       process.exitCode = 1;
       break;
     }

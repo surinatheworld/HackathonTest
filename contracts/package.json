@@ -18,7 +18,9 @@
     "sync-config": "node scripts/sync-config.js",
     "verify:fuji": "hardhat run scripts/verify-fuji.js --network fuji",
     "test:fork": "node -e \"process.env.FORK_FUJI=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'test','test/fork/fuji.fork.js'],{stdio:'inherit',env:process.env})\"",
-    "relayer": "node scripts/relayer.js"
+    "relayer": "node scripts/relayer.js",
+    "handover:fuji": "hardhat run scripts/handover.js --network fuji",
+    "handover:l1": "hardhat run scripts/handover.js --network farml1"
   },
   "license": "MIT",
   "type": "commonjs",

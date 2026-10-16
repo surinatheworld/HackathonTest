@@ -1,0 +1,9 @@
+{
+  "chainId": 43113,
+  "blockchainID": "0x7fc93d85c6d62c5b2ac0b519c87010ea5294012d1e407030d6acd0021cac10d5",
+  "dayLength": 60,
+  "usdc": "0x4cCD2fb3BF5EE5F28622fc75D98bE8D4D96d6802",
+  "vault": "0x08fF981e08406C51919a308E0C98b6236f34a75d",
+  "butler": "0x02bae56fc883c07842fa85D93BA4eCC6766DdD98",
+  "deployer": "0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC"
+}
