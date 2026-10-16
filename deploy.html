@@ -133,6 +133,7 @@ const FUJI = LOCAL
   : { chainId: 43113, name: "Avalanche Fuji C-Chain", rpc: "https://api.avax-test.network/ext/bc/C/rpc", explorer: "https://testnet.snowtrace.io", currency: "AVAX" };
 const KEY = LOCAL ? "farm-deploy-local" : "farm-deploy-v1";
 const U = (n) => E.parseUnits(String(n), 6);
+const MIN_GAS = 1_000_000n;
 
 let st = {};
 try { st = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
@@ -293,11 +294,24 @@ $("#b-link").onclick = () => guard("l-link", async () => {
     if ((await v.remoteAddress()) === E.ZeroAddress) await (await v.setRemote(l.blockchainID, l.land)).wait();
     k.fuji = true; save();
   });
+  // Vaults deployed before the gas fix start at 400k; ICM receipts need more headroom.
+  await step("l-link", "Fuji: requiredGasLimit = 1.000.000", k.gasFuji, async () => {
+    const s = await switchTo(FUJI);
+    const v = new E.Contract(f.vault, A.FarmVault.abi, s);
+    if ((await v.requiredGasLimit()) < MIN_GAS) await (await v.setRequiredGasLimit(MIN_GAS)).wait();
+    k.gasFuji = true; save();
+  });
   await step("l-link", "L1: FarmLand.setRemote(Fuji, FarmVault)", k.l1, async () => {
     const s = await switchTo(l);
     const c = new E.Contract(l.land, A.FarmLand.abi, s);
     if ((await c.remoteAddress()) === E.ZeroAddress) await (await c.setRemote(f.blockchainID, f.vault)).wait();
     k.l1 = true; save();
+  });
+  await step("l-link", "L1: requiredGasLimit ≥ 1.000.000", k.gasL1, async () => {
+    const s = await switchTo(l);
+    const c = new E.Contract(l.land, A.FarmLand.abi, s);
+    if ((await c.requiredGasLimit()) < MIN_GAS) await (await c.setRequiredGasLimit(MIN_GAS)).wait();
+    k.gasL1 = true; save();
   });
   log("l-link", "ok", "Xong. Mở game, bấm Kết nối ví và thử trồng 1 cây ớt.");
 });

@@ -18,9 +18,27 @@ const BUTLER = ["function owner() view returns (address)", "function dailyCap() 
 
 async function main() {
   const fuji = new ethers.JsonRpcProvider(FUJI_RPC, 43113, { staticNetwork: true });
-  const res = await (await fetch(API)).json();
-  const created = (res.result || []).filter((t) => t.contractAddress && (!t.to || t.to === "")).map((t) => ethers.getAddress(t.contractAddress));
-  if (!created.length) throw new Error(`Không thấy contract nào do ${owner} tạo trên Fuji.`);
+  // Every contract an EOA creates lives at getCreateAddress(owner, nonce), so scan the owner's nonces
+  // straight from the chain. Explorer indexes can lag minutes behind; this cannot.
+  const nonce = await fuji.getTransactionCount(owner);
+  const created = [];
+  for (let start = 0; start < nonce; start += 20) {
+    const batch = [];
+    for (let n = start; n < Math.min(nonce, start + 20); n++) {
+      const a = ethers.getCreateAddress({ from: owner, nonce: n });
+      batch.push(fuji.getCode(a).then((c) => (c !== "0x" ? { n, a } : null)));
+    }
+    for (const r of await Promise.all(batch)) if (r) created.push(r);
+  }
+  created.sort((x, y) => x.n - y.n);
+  if (!created.length) {
+    // Fallback for contracts created by a factory: ask the explorer.
+    const res = await (await fetch(API)).json();
+    for (const t of res.result || []) if (t.contractAddress && !t.to) created.push({ n: Number(t.nonce), a: ethers.getAddress(t.contractAddress) });
+  }
+  if (!created.length) throw new Error(`Không thấy contract nào do ${owner} tạo trên Fuji (nonce hiện tại ${nonce}).`);
+  console.log(`Tìm thấy ${created.length} contract do ví tạo (nonce 0..${nonce - 1}).`);
+  for (let i = 0; i < created.length; i++) created[i] = created[i].a;
 
   let vault, vaultIdx = -1;
   for (let i = created.length - 1; i >= 0; i--) {
