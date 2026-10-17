@@ -401,7 +401,7 @@ function gate(g) {
   R(g, '#5f2b1e', x0 + 10, 2, x1 - x0 - 20, 6); R(g, '#c0533d', x0 + 10, 2, x1 - x0 - 20, 1);
   R(g, '#f2c14e', (x0 + x1) / 2 - 3, -2, 6, 6);
   // name board
-  const bx = 20.75 * T, bw = 2.5 * T;
+  const bw = 3.5 * T, bx = 22 * T - bw / 2;
   R(g, '#3f2812', bx - 2, 27, bw + 4, 20); R(g, '#7c1f1a', bx, 29, bw, 16); R(g, '#f2c14e', bx, 29, bw, 1); R(g, '#f2c14e', bx, 44, bw, 1);
   g.font = '800 10px "Be Vietnam Pro", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillStyle = '#3f1210'; g.fillText('CỔNG C-CHAIN', bx + bw / 2 + 1, 38);
