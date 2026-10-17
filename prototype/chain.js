@@ -129,6 +129,13 @@
     return new E.Wallet(pk, rp);
   }
   CH.hasSavedGameWallet = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
+  CH.exportPrivyKey = () => (CH.walletKind === "privy" ? privy.exportKey() : Promise.reject(new Error("Không phải ví Privy.")));
+  /** Ask MetaMask to show a farm token (USDC or gAVAX) in its asset list. */
+  CH.watchToken = (which = "usdc") => {
+    if (!window.ethereum) return Promise.reject(new Error("Không thấy MetaMask/Core."));
+    const t = which === "gavax" ? { address: c.gavax, symbol: "gAVAX", decimals: 18 } : { address: c.usdc, symbol: "USDC", decimals: 6 };
+    return window.ethereum.request({ method: "wallet_watchAsset", params: { type: "ERC20", options: t } });
+  };
   CH.exportKey = () => (CH.walletKind === "game" ? signer.privateKey : null);
   CH.importKey = (pk) => {
     const w = new E.Wallet(pk.trim());
