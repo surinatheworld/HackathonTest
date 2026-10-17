@@ -33,6 +33,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - Chỉ trả gas cho các hàm người chơi trên contract của game. `approve` chỉ được tới contract của game.
   - Có trần gas, và hạn request tối đa 1 giờ.
   - Mô phỏng lệnh trước khi gửi để báo lỗi rõ ràng (ví dụ "Cây chưa chín").
+- **Privy** (`prototype/privy.js`): đăng nhập bằng email hoặc Google, Privy tạo sẵn ví nhúng trên Fuji. Thư viện tải từ esm.sh khi người chơi bấm nút, nên site vẫn không cần build. Ví Privy ký cùng loại request EIP-712, fee manager vẫn trả gas.
 - **Ví trong game**: khóa lưu trên trình duyệt, chỉ dùng cho testnet, sao lưu được. Ví chỉ ký dữ liệu, nên thay bằng ví nhúng như **Privy** về sau không phải đổi contract.
 - **ButlerAccount**: ví của quản gia AI. Agent chỉ có session key, tự hết hạn sau 60 ngày, bị giới hạn bởi rule, hạn mức ngày và kill switch.
 
@@ -154,7 +155,7 @@ Không có token game, không có random drop: mọi thứ tất định.
 - [x] Verify source trên Snowtrace, test fork trên contract thật
 - [x] Hợp tác xã (Chainlink, thanh lý) và Ao cá (x·y = k) trên contract
 - [x] Nguồn lãi `IYieldSource`: mock trên Fuji, adapter Aave v3 cho mainnet
-- [ ] Ví nhúng Privy (App ID đã có), giữ nguyên contract và fee manager
+- [x] Đăng nhập Privy (email / Google, ví nhúng), giữ nguyên contract và fee manager
 - [ ] Bot thanh lý, bot cân giá Ao cá theo Chainlink, indexer cho bảng xếp hạng
 - [ ] Giới hạn lượt trả gas theo người chơi (Cloudflare KV), pixel art thật
 
