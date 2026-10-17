@@ -551,7 +551,7 @@ const PANELS={
   },
   gate:{
     stats:()=>`<p class="note">Đây là nơi game <b>trả phí giao dịch giúp bạn</b>. Bạn chỉ cần bấm xác nhận, cổng làng gửi giao dịch lên blockchain thay bạn. Tiền vẫn luôn là của bạn.</p>`+
-      (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']]):'')+
+      (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.pool?CH.relayInfo.pool.filter(w=>w.active).length+' ví (chia theo người chơi)':CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Tổng số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']]):'')+
       `<div class="list">${st.log.slice(-14).reverse().map(l=>`<div class="item" style="grid-template-columns:1fr"><small>Ngày ${nf(l.day%365,1)} · ${chainChip(l.route)}</small><span style="font-size:13px">${esc(l.text)}</span></div>`).join('')||'<p class="note">Chưa có giao dịch nào.</p>'}</div>`,
     actions:()=>''
   },

@@ -11,7 +11,7 @@ export async function onRequestPost({ request, env }) {
     return new Response(JSON.stringify({ error: "Body phải là JSON." }), { status: 400 });
   }
   try {
-    return await relay(body, env, config);
+    return await relay(body, env, config, { ip: request.headers.get("cf-connecting-ip") });
   } catch (e) {
     return new Response(JSON.stringify({ error: e?.shortMessage || e?.message || String(e) }), { status: 500 });
   }

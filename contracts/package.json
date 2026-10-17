@@ -27,7 +27,8 @@
     "rehearse:drought": "node -e \"process.env.FORK_FUJI=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'run','scripts/rehearse-drought.js'],{stdio:'inherit',env:process.env})\"",
     "deploy:items": "hardhat run scripts/deploy-items.js --network fuji",
     "smoke:items": "node scripts/items-smoke.js",
-    "deploy:quests": "hardhat run scripts/deploy-quests.js --network fuji"
+    "deploy:quests": "hardhat run scripts/deploy-quests.js --network fuji",
+    "fund:relayers": "node scripts/fund-relayers.js"
   },
   "license": "MIT",
   "type": "commonjs",

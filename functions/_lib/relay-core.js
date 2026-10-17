@@ -146,16 +146,91 @@ function explain(e) {
 const json = (status, body) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
+// Rate limits, so a stranger with many fresh wallets cannot drain the relayer pool. Counters live in this
+// isolate's memory and, where Cloudflare offers it, the colo's Cache API; both are best effort and reset
+// with the window. Limits per IP stay loose because a whole classroom can share one IP.
+const LIMITS = {
+  ip: [{ n: 300, s: 60 }, { n: 10_000, s: 86_400 }],
+  wallet: [{ n: 40, s: 60 }, { n: 500, s: 86_400 }],
+};
+const counters = new Map();
+
+async function bump(id, windowS) {
+  const slot = Math.floor(Date.now() / 1000 / windowS);
+  const key = `${id}:${windowS}:${slot}`;
+  let n = (counters.get(key) || 0) + 1;
+  counters.set(key, n);
+  if (counters.size > 5000) for (const k of counters.keys()) if (!k.endsWith(`:${windowS}:${slot}`)) counters.delete(k);
+  try {
+    const cache = globalThis.caches?.default;
+    if (cache) {
+      const url = "https://rate-limit.nongtrai.internal/" + encodeURIComponent(key);
+      const hit = await cache.match(url);
+      n = Math.max(n, (hit ? Number(await hit.text()) || 0 : 0) + 1);
+      await cache.put(url, new Response(String(n), { headers: { "cache-control": `max-age=${windowS}` } }));
+    }
+  } catch {}
+  return n;
+}
+
+async function limited(kind, id) {
+  if (!id) return null;
+  for (const { n, s } of LIMITS[kind]) {
+    if ((await bump(`${kind}:${id}`, s)) > n) {
+      const wait = s - (Math.floor(Date.now() / 1000) % s);
+      const msg = s < 3600 ? "Bạn thao tác nhanh quá, đợi một phút rồi thử lại." : "Hôm nay bạn đã dùng hết lượt được trả gas hộ, mai quay lại nhé.";
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 429,
+        headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": String(wait) },
+      });
+    }
+  }
+  return null;
+}
+
+// Relayer pool: the configured key plus child keys derived from it, so no extra secret is needed. Each player
+// sticks to one wallet (picked from their address), so players spread over the pool and stop racing for the
+// same nonce. A child wallet with too little AVAX is skipped; fund them with `npm run fund:relayers`.
+const POOL_SIZE = 4;
+const MIN_BALANCE = ethers.parseEther("0.01");
+
+export function relayerKeys(env) {
+  const base = ethers.hexlify(env.RELAYER_PRIVATE_KEY.startsWith("0x") ? env.RELAYER_PRIVATE_KEY : "0x" + env.RELAYER_PRIVATE_KEY);
+  const n = Math.max(1, Math.min(16, Number(env.RELAYER_POOL_SIZE) || POOL_SIZE));
+  const keys = [base];
+  for (let i = 1; i < n; i++) keys.push(ethers.keccak256(ethers.solidityPacked(["bytes32", "string", "uint8"], [base, "nong-trai-relayer", i])));
+  return keys;
+}
+
+async function pickWallet(env, provider, from) {
+  const keys = relayerKeys(env);
+  const start = Number(BigInt(ethers.keccak256(from)) % BigInt(keys.length));
+  for (let k = 0; k < keys.length; k++) {
+    const i = (start + k) % keys.length;
+    const w = new ethers.Wallet(keys[i], provider);
+    if (i === 0 || (await provider.getBalance(w.address)) >= MIN_BALANCE) return w;
+  }
+}
+
 export async function relayStatus(env, config) {
   if (!env.RELAYER_PRIVATE_KEY) return json(503, { ready: false, reason: "RELAYER_PRIVATE_KEY chưa được cấu hình." });
   const provider = new ethers.JsonRpcProvider(env.FUJI_RPC_URL || config.rpc, config.chainId, { staticNetwork: true });
-  const wallet = new ethers.Wallet(env.RELAYER_PRIVATE_KEY);
-  const bal = await provider.getBalance(wallet.address);
-  return json(200, { ready: bal > 0n, relayer: wallet.address, balance: ethers.formatEther(bal), forwarder: config.forwarder });
+  const addrs = relayerKeys(env).map((k) => new ethers.Wallet(k).address);
+  const bals = await Promise.all(addrs.map((a) => provider.getBalance(a)));
+  const total = bals.reduce((a, b) => a + b, 0n);
+  return json(200, {
+    ready: bals[0] > 0n || bals.some((b) => b >= MIN_BALANCE),
+    relayer: addrs[0],
+    balance: ethers.formatEther(total),
+    pool: addrs.map((a, i) => ({ address: a, balance: ethers.formatEther(bals[i]), active: i === 0 || bals[i] >= MIN_BALANCE })),
+    forwarder: config.forwarder,
+  });
 }
 
-export async function relay(body, env, config) {
+export async function relay(body, env, config, meta = {}) {
   if (!env.RELAYER_PRIVATE_KEY) return json(503, { error: "Fee manager chưa bật: thiếu RELAYER_PRIVATE_KEY." });
+  const ipLimit = await limited("ip", meta.ip);
+  if (ipLimit) return ipLimit;
   const r = body?.request;
   if (!r || !r.from || !r.to || !r.data || !r.signature) return json(400, { error: "Thiếu request." });
   let req;
@@ -178,9 +253,11 @@ export async function relay(body, env, config) {
   if (req.deadline < now || req.deadline > now + MAX_DEADLINE_S) return json(400, { error: "Hạn của request không hợp lệ." });
   const deny = policy(config, req);
   if (deny) return json(403, { error: deny });
+  const walletLimit = await limited("wallet", req.from);
+  if (walletLimit) return walletLimit;
 
   const provider = new ethers.JsonRpcProvider(env.FUJI_RPC_URL || config.rpc, config.chainId, { staticNetwork: true });
-  const wallet = new ethers.Wallet(env.RELAYER_PRIVATE_KEY, provider);
+  const wallet = await pickWallet(env, provider, req.from);
   const fwd = new ethers.Contract(config.forwarder, FORWARDER_ABI, wallet);
   if (!(await fwd.verify(req))) return json(400, { error: "Chữ ký không hợp lệ, đã dùng hoặc đã hết hạn." });
   // Simulate the inner call exactly as the forwarder will make it (ERC-2771: data ‖ signer, sent by the
@@ -190,7 +267,7 @@ export async function relay(body, env, config) {
   } catch (e) {
     return json(422, { error: "Giao dịch sẽ thất bại: " + explain(e) });
   }
-  // One relayer wallet serves every player and the public Fuji RPC does not show pending transactions, so
+  // Several players can share one pool wallet and the public Fuji RPC does not show pending transactions, so
   // requests arriving together can pick the same nonce: the node keeps one and silently drops the others.
   // So only answer once the transaction is mined (Fuji: ~2 s). If it was dropped, the forwarder still accepts
   // the request (verify() is true until it runs), and it is sent again with a fresh nonce. It can never run twice.
