@@ -174,6 +174,9 @@ const ICON_VARS = {
   '--ui-m-bolt': '<path d="M13.6 1.8 4.6 13.6h5.8L8.8 22.2l10-12.8h-5.9l2.2-7.6z"/>',
   '--ui-m-scroll': '<path d="M5 3.5h10.5L19.5 7.5V20.5H5z" fill="none" stroke="#000" stroke-width="2.2" stroke-linejoin="round"/><path d="M8.5 10.5h7.5M8.5 14h7.5M8.5 17.5h4.5" stroke="#000" stroke-width="2" stroke-linecap="round"/>',
   '--ui-m-wallet': '<path d="M5 7.2 15.6 4c.9-.3 1.9.4 1.9 1.4v1.8" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/><rect x="3" y="7" width="18" height="13" rx="2.8" fill="none" stroke="#000" stroke-width="2.2"/><circle cx="16.6" cy="13.5" r="1.7"/>',
+  '--ui-m-quest': '<path d="M6 2.8v18.4" stroke="#000" stroke-width="2.2" stroke-linecap="round"/><path d="M7 3.6h11.2l-2.6 4.2 2.6 4.2H7z"/>',
+  '--ui-m-bag': '<path d="M8.6 8V6.4a3.4 3.4 0 0 1 6.8 0V8" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round"/><path d="M5.2 8h13.6l1 11.2a1.8 1.8 0 0 1-1.8 2H6a1.8 1.8 0 0 1-1.8-2z"/>',
+  '--ui-m-help': '<circle cx="12" cy="12" r="9.2" fill="none" stroke="#000" stroke-width="2.2"/><path d="M9.3 9.4a2.8 2.8 0 1 1 3.9 2.6c-.8.4-1.2 1-1.2 1.9v.6" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.4" r="1.4"/>',
   '--ui-m-mail': '<rect x="3" y="5.5" width="18" height="13" rx="2.4" fill="none" stroke="#000" stroke-width="2.2"/><path d="M4.5 7.5 12 13l7.5-5.5" fill="none" stroke="#000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>',
   '--ui-m-tap': '<path d="M9.4 11.2V5.3a1.8 1.8 0 0 1 3.6 0V10l4.2.9c1.3.3 2.2 1.6 2 2.9l-.8 4.9c-.2 1.3-1.3 2.3-2.7 2.3H11c-.9 0-1.7-.4-2.2-1.1l-3.5-4.6a1.6 1.6 0 0 1 2.4-2.1z"/>',
   /* full-colour art */
@@ -260,7 +263,7 @@ function hud() {
   const brand = $('.hud .brand');
   if (brand && !brand.querySelector('.ui-logo')) brand.insertAdjacentHTML('afterbegin', svgUse('ui-logo', 'ui-logo'));
 
-  for (const id of ['sp0', 'sp1', 'sp2', 'b-storm', 'b-design', 'b-wallet']) {
+  for (const id of ['sp0', 'sp1', 'sp2', 'b-storm', 'b-quest', 'b-inv', 'b-design', 'b-wallet']) {
     const b = doc.getElementById(id);
     if (!b) continue;
     b.classList.add('ui-i');

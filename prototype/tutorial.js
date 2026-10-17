@@ -26,7 +26,7 @@ const STEPS = [
   { title: 'Vườn cây = gửi có kỳ hạn', text: 'Giờ tới <b>Vườn cây</b>. Tiền bị <b>khóa</b> 7, 30 hoặc 90 ngày. Khóa càng lâu, lãi càng cao. Nhổ sớm thì lấy lại tiền nhưng mất lãi.', target: 'orchard', done: (e) => e.type === 'open' && e.id === 'orchard' },
   { title: 'Rủi ro: Ao cá và Hợp tác xã', text: '<b>Ao cá</b>: góp tiền để người khác đổi tiền, bạn được chia phí, nhưng giá biến động thì tiền góp có thể hao. <b>Hợp tác xã</b>: vay tiền bằng cách gửi AVAX làm đảm bảo, giá AVAX giảm mạnh thì bị lấy mất AVAX. Bấm <b>Gây bão</b> để xem (chỉ là mô phỏng).', el: '#b-storm', next: 'Tiếp' },
   { title: 'Chơi thật trên blockchain', text: 'Bấm <b>Kết nối ví</b> rồi chọn <b>Email / Google</b>. Không cần cài gì, không mất phí: game trả phí giao dịch giúp bạn. Vào Ruộng rau, bấm <b>Nhận 1.000 USDC test</b> để có tiền chơi.', el: '#b-wallet', next: 'Tiếp' },
-  { title: 'Sẵn sàng rồi!', text: 'Bấm <b>Nhiệm vụ</b> trên thanh trên cùng để có việc làm tiếp, từ dễ đến khó, mỗi việc đều có thưởng. Muốn xem lại hướng dẫn, bấm <b>Hướng dẫn</b>. Chúc bạn được mùa!', next: 'Chơi thôi' },
+  { title: 'Sẵn sàng rồi!', text: 'Bấm nút <b>Nhiệm vụ</b> để có việc làm tiếp, từ dễ đến khó, mỗi việc đều có thưởng. Muốn xem lại hướng dẫn, bấm <b>Hướng dẫn</b>. Chúc bạn được mùa!', next: 'Chơi thôi' },
 ];
 
 /* ---------------------------------------------------------------- styles */
@@ -73,7 +73,7 @@ const el = { n: $('#tut-n'), t: $('#tut-t'), x: $('#tut-x'), d: $('#tut-d'), w: 
 // replay button in the HUD
 const ctrls = $('.hud .ctrls');
 const replay = doc.createElement('button');
-replay.className = 'btn'; replay.id = 'b-tutorial'; replay.type = 'button'; replay.textContent = 'Hướng dẫn'; replay.title = 'Xem lại hướng dẫn chơi';
+replay.className = 'btn ui-i'; replay.id = 'b-tutorial'; replay.type = 'button'; replay.innerHTML = '<span class="ui-lbl">Hướng dẫn</span>'; replay.title = 'Xem lại hướng dẫn chơi';
 if (ctrls) ctrls.insertBefore(replay, $('#b-design') || null);
 
 /* ---------------------------------------------------------------- state */
@@ -117,7 +117,7 @@ function finish() { i = -1; card.hidden = true; clearGlow(); store.set('done'); 
 function begin() { if (F.current && F.current !== 'home') F.closePanel(); go(0); }
 
 el.next.onclick = () => go(i + 1);
-el.skip.onclick = () => { finish(); F.toast('Đã bỏ qua hướng dẫn. Bấm "Hướng dẫn" trên thanh trên cùng để xem lại.'); };
+el.skip.onclick = () => { finish(); F.toast('Đã bỏ qua hướng dẫn. Bấm nút "Hướng dẫn" để xem lại.'); };
 replay.onclick = () => begin();
 addEventListener('keydown', (e) => { if (active() && e.key === 'Escape' && !F.current) { finish(); } });
 
