@@ -801,41 +801,16 @@
     var ch = Math.round(cw * H / W), pad = phone ? 5 : 6, headH = phone ? 26 : 32;
     var rw = cw + pad * 2 + 2, rhFull = 2 + headH + ch + pad, rh = collapsed ? 2 + headH : rhFull;
     var sf = readSafe(), gap = phone ? 8 : 12, open = isPanelOpen();
-    var x, y, anchor, away = false;
-    if (phone) {
-      anchor = 'top'; x = sw - Math.max(gap, sf.r) - rw; y = gap; away = open;
-    } else {
-      obsFrom(OBS[0], logEl, 8); obsFrom(OBS[1], hintEl, 8);
-      /* reserve the prompt's bottom-centre band even while it is hidden, so the minimap does not hop around */
-      var pw = 290; if (shown(promptEl)) pw = Math.max(pw, promptEl.offsetWidth + 28);
-      var pb = OBS[2]; pb.on = true; pb.w = pw; pb.x = sw / 2 - pw / 2; pb.h = 16 + sf.b + 58; pb.y = sh - pb.h;
-      var right = sw - Math.max(gap, sf.r), pr = OBS[3];
-      pr.on = false;
-      if (open) {
-        if (panelEl) {
-          obsFrom(pr, panelEl, 6);
-          if (pr.on && pr.x + pr.w / 2 > sw / 2) right = Math.min(right, panelEl.offsetLeft - gap);
-        } else right = Math.min(right, sw - 12 - Math.min(390, sw - 24) - gap);
-      }
-      /* try the preferred size at the bottom, then at the top, then smaller sizes before giving up */
-      var minX = Math.max(gap, sf.l), found = false, cw0 = cw;
-      for (var si = 0; si < 3 && !found; si++) {
-        var c = si === 0 ? cw0 : (si === 1 ? 168 : 140);
-        if (si > 0 && c >= cw0) continue;
-        var chc = Math.round(c * H / W), rwc = c + pad * 2 + 2, rhc = 2 + headH + chc + pad, xc = right - rwc;
-        if (xc < minX || rhc + 2 * gap > sh) continue;
-        var yb = sh - (gap + sf.b) - rhc;
-        if (yb >= gap && !hits(xc, yb, rwc, rhc)) { anchor = 'bottom'; found = true; }
-        else if (!hits(xc, gap, rwc, rhc)) { anchor = 'top'; found = true; }
-        if (found) { cw = c; ch = chc; rw = rwc; rhFull = rhc; x = xc; }
-      }
-      if (!found) {
-        x = right - rw; anchor = open ? (lay.anchor || 'top') : 'bottom'; away = open;
-        if (x < minX) x = open ? Math.max(0, x) : minX;
-      }
-      rh = collapsed ? 2 + headH : rhFull;
-      y = anchor === 'bottom' ? sh - (gap + sf.b) - rh : gap;
+    /* Always the top-left corner (like Ngọc Rồng Online): the quest tracker sits under it, and the quest panel
+       (docked left on desktop) opens below it while there is room, otherwise the minimap steps aside. */
+    var x = Math.max(gap, sf.l), y = gap, anchor = 'top', away = false;
+    rh = collapsed ? 2 + headH : rhFull;
+    if (open && panelEl && shown(panelEl)) {
+      if (phone) away = panelEl.offsetTop < y + rh + gap;
+      else if (panelEl.classList.contains('left')) away = sh - (y + rh) - 2 * gap < 380;
+      else away = panelEl.offsetLeft < x + rw + gap;
     }
+    stage.style.setProperty('--mm-bot', (away ? 0 : y + rh) + 'px');
     x = Math.round(x); y = Math.round(y);
     var same = lay.ready && lay.cw === cw && lay.x === x && lay.y === y && lay.away === away && lay.anchor === anchor && lay.phone === phone && lay.collapsed === collapsed;
     if (same) return;

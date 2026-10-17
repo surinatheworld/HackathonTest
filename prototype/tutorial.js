@@ -20,7 +20,7 @@ const store = {
 const STEPS = [
   { title: 'Chào mừng tới làng!', text: 'Mỗi khu trong làng là một cách cho tiền sinh lời, giống ngoài đời nhưng dùng <b>tiền thử</b>. Hướng dẫn chỉ mất khoảng 1 phút.', next: 'Bắt đầu' },
   { title: 'Di chuyển', text: 'Đi bằng <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> hoặc phím mũi tên. Trên điện thoại thì <b>chạm vào bản đồ</b>. Thử đi vài bước nhé.', done: (e) => e.type === 'moved' },
-  { title: 'Bản đồ nhỏ', text: 'Góc màn hình là <b>bản đồ nhỏ</b>. Bấm vào một khu trên đó, nhân vật tự đi tới.', el: '.mm', next: 'Đã hiểu' },
+  { title: 'Bản đồ nhỏ', text: 'Góc trên bên trái là <b>bản đồ nhỏ</b>. Bấm vào một khu trên đó, nhân vật tự đi tới.', el: '.mm', next: 'Đã hiểu' },
   { title: 'Ruộng rau = gửi tiết kiệm', text: 'Đi theo <b>mũi tên vàng</b> tới <b>Ruộng rau</b>, đứng cạnh biển gỗ rồi bấm <kbd>E</kbd>.', target: 'lend', done: (e) => e.type === 'open' && e.id === 'lend' },
   { title: 'Gieo hạt', text: 'Ruộng rau giống <b>gửi tiết kiệm</b>: gửi USDC vào, mỗi ngày có lãi (4%/năm), rút lúc nào cũng được. Bấm <b>Gieo hạt (gửi)</b> để thử.', el: '[data-act="lend-dep"],[data-act="c-lend-dep"]', done: (e) => e.type === 'act' && /lend-dep$/.test(e.act) },
   { title: 'Vườn cây = gửi có kỳ hạn', text: 'Giờ tới <b>Vườn cây</b>. Tiền bị <b>khóa</b> 7, 30 hoặc 90 ngày. Khóa càng lâu, lãi càng cao. Nhổ sớm thì lấy lại tiền nhưng mất lãi.', target: 'orchard', done: (e) => e.type === 'open' && e.id === 'orchard' },
@@ -56,7 +56,7 @@ const css = `
 @keyframes tut-in{from{opacity:0;transform:translate(-50%,16px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
 @keyframes tut-pulse{50%{opacity:.25}}
 @keyframes tut-ring{50%{outline-color:rgba(242,193,78,.35);box-shadow:0 0 18px rgba(242,193,78,.6)}}
-@media (max-width:760px){.tut{bottom:auto;top:calc(10px + env(safe-area-inset-top,0px))}.app.open .tut{top:10px}}
+@media (max-width:760px){.tut{bottom:auto;top:calc(var(--mm-bot,0px) + 10px)}.app.open .tut{top:10px}}
 @media (prefers-reduced-motion:reduce){.tut,.tut-glow,.tut-wait::before{animation:none!important}}
 `;
 const style = doc.createElement('style'); style.textContent = css; doc.head.appendChild(style);
