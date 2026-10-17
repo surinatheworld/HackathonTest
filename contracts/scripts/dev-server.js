@@ -41,7 +41,7 @@ function run(args) {
 function configJs(d) {
   return `// Local dev config served by dev-server.js
 window.FARM_CONFIG={dayLength:${d.dayLength},relayUrl:"/api/relay",local:true,
-cchain:{chainId:31337,name:"Local C-Chain",rpc:location.origin+"/rpc",explorer:"",currency:"ETH",forwarder:"${d.forwarder}",usdc:"${d.usdc}",game:"${d.game}",butler:"${d.butler}",gavax:"${d.gavax}",coop:"${d.coop}",pond:"${d.pond}",demoFeed:"${d.demoFeed}",items:"${d.items}"}};
+cchain:{chainId:31337,name:"Local C-Chain",rpc:location.origin+"/rpc",explorer:"",currency:"ETH",forwarder:"${d.forwarder}",usdc:"${d.usdc}",game:"${d.game}",butler:"${d.butler}",gavax:"${d.gavax}",coop:"${d.coop}",pond:"${d.pond}",demoFeed:"${d.demoFeed}",items:"${d.items}",quests:"${d.quests}"}};
 `;
 }
 
@@ -65,7 +65,7 @@ async function main() {
   await run(["run", "scripts/deploy-local.js", "--network", "localhost"]);
   const d = JSON.parse(fs.readFileSync(path.join(ROOT, "deployments", "local.json"), "utf8"));
   const core = await import(pathToFileURL(path.join(WEB, "functions", "_lib", "relay-core.js")).href);
-  const relayConfig = { chainId: 31337, rpc: RPC, forwarder: d.forwarder, game: d.game, usdc: d.usdc, gavax: d.gavax, coop: d.coop, pond: d.pond, items: d.items };
+  const relayConfig = { chainId: 31337, rpc: RPC, forwarder: d.forwarder, game: d.game, usdc: d.usdc, gavax: d.gavax, coop: d.coop, pond: d.pond, items: d.items, quests: d.quests };
   const env = { RELAYER_PRIVATE_KEY: LOCAL_RELAYER_KEY, FUJI_RPC_URL: RPC };
 
   http

@@ -74,6 +74,10 @@
       "function acceptOffer(uint256 offerId, uint256[] payIds)",
       "function cancelOffer(uint256 offerId)",
     ],
+    quests: [
+      "function status(address) view returns (uint256 quest, bool ready, uint256 reward)",
+      "function complete()",
+    ],
     forwarder: ["function nonces(address) view returns (uint256)"],
   };
   const STATUS = ["None", "Growing", "Harvested", "Uprooted"];
@@ -124,6 +128,31 @@
   const itemsR = c.items ? new E.Contract(c.items, ABI.items, rp) : null;
   const itemsI = new E.Interface(ABI.items);
   CH.hasItems = !!itemsR;
+  const questsR = c.quests ? new E.Contract(c.quests, ABI.quests, rp) : null;
+  const questsI = new E.Interface(ABI.quests);
+  CH.hasQuests = !!questsR;
+  /** Nhiệm vụ, easy to hard. zone: where to go (a map zone or a panel), how: one plain sentence. Rewards are test USDC. */
+  CH.QUESTS = [
+    { ch: 1, title: "Nhận tiền thử", how: "Vào Ruộng rau, bấm Nhận 1.000 USDC test.", zone: "lend", reward: 10 },
+    { ch: 1, title: "Gửi tiết kiệm", how: "Gửi ít nhất 10 USDC vào Ruộng rau (Gieo hạt).", zone: "lend", reward: 10 },
+    { ch: 1, title: "Trồng cây đầu tiên", how: "Trồng một cây bất kỳ ở Vườn cây.", zone: "orchard", reward: 10 },
+    { ch: 1, title: "Tưới cây", how: "Tưới cây vừa trồng ở Vườn cây.", zone: "orchard", reward: 10 },
+    { ch: 2, title: "Thu hoạch", how: "Trồng cây ớt, chờ chín (7 ngày game, khoảng 7 phút) rồi thu hoạch.", zone: "orchard", reward: 20 },
+    { ch: 2, title: "Có 10 điểm mùa", how: "Thu hoạch cây hoặc gom điểm chín ở Vườn bác Tư.", zone: "neighbor", reward: 20 },
+    { ch: 2, title: "Nhận nông sản", how: "Mở Kho đồ, nhận nông sản của cây đã thu hoạch.", zone: "inventory", reward: 20 },
+    { ch: 2, title: "Mua đồ trang trí", how: "Mua một món ở Tiệm đồ trong Kho đồ bằng điểm mùa.", zone: "inventory", reward: 20 },
+    { ch: 3, title: "Thả cá", how: "Góp tiền vào Ao cá (Thả cá).", zone: "pond", reward: 30 },
+    { ch: 3, title: "Vay ở Hợp tác xã", how: "Nhận gAVAX, gửi vào kho thóc rồi vay một ít USDC.", zone: "coop", reward: 40 },
+    { ch: 3, title: "Trả hết nợ", how: "Trả hết khoản vay ở Hợp tác xã.", zone: "coop", reward: 50 },
+    { ch: 4, title: "Đăng đề nghị đổi đồ", how: "Ở Chợ phiên, đăng một đề nghị đổi đồ.", zone: "market", reward: 30 },
+    { ch: 4, title: "Hái trộm", how: "Hỏi bạn bè địa chỉ ví, hái trộm điểm chín của họ ở Vườn bác Tư.", zone: "neighbor", reward: 30 },
+    { ch: 4, title: "Thuê người giữ vườn", how: "Ở Vườn bác Tư, bấm Thuê người giữ vườn.", zone: "neighbor", reward: 30 },
+    { ch: 5, title: "Nông dân chăm chỉ", how: "Tưới cây 7 ngày liên tục, rồi nhận huy hiệu trong Kho đồ.", zone: "inventory", reward: 50 },
+    { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ hệ số an toàn từ 1,5 trong 3 ngày, rồi nhận huy hiệu.", zone: "inventory", reward: 80 },
+    { ch: 5, title: "Kiên nhẫn", how: "Thu hoạch một cây sầu riêng 90 ngày (khoảng 90 phút), rồi nhận huy hiệu.", zone: "inventory", reward: 100 },
+    { ch: 5, title: "Lão nông", how: "Có đủ 5 huy hiệu bài học, rồi nhận huy hiệu Lão nông.", zone: "inventory", reward: 200 },
+  ];
+  CH.CHAPTERS = { 1: "Làm quen", 2: "Chăm vườn", 3: "Tài chính", 4: "Làng xóm", 5: "Bậc thầy" };
   CH.hasCoop = !!(coopR && avaxR);
   CH.hasPond = !!(pondR && avaxR);
   const domain = { name: "NongTraiDeFi", version: "1", chainId: c.chainId, verifyingContract: c.forwarder };
@@ -260,6 +289,10 @@
     };
     const [coop, pond, gavax] = await Promise.all([readCoop(a), readPond(a), avaxR ? avaxR.balanceOf(a) : 0n]);
     Object.assign(next, { coop, pond, gavax: toAvax(gavax) });
+    if (questsR) {
+      const q = await questsR.status(a).catch(() => null);
+      next.quest = q ? { index: Number(q.quest), ready: q.ready, reward: toNum(q.reward), done: Number(q.quest) >= CH.QUESTS.length } : CH.data?.quest || null;
+    }
     next.items = await readItems(a, next.crops).catch((e) => { console.error("[items]", e); return CH.data?.items || null; });
     if (CH.account !== a) return; // the wallet changed while reading
     CH.data = next;
@@ -444,6 +477,10 @@
 
   // ---------- Kho đồ ----------
   const GI = 250_000;
+  CH.completeQuest = () => {
+    const q = CH.data?.quest;
+    return run(`Nhận thưởng nhiệm vụ: ${CH.QUESTS[q?.index]?.title || ""}`, c.quests, questsI, "complete", [], 300_000);
+  };
   CH.claimHarvest = (cropId) => run(`Nhận nông sản cây #${cropId}`, c.items, itemsI, "claimHarvest", [cropId], GI);
   CH.claimBadge = (id, arg = 0) => run(`Nhận huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "claimBadge", [id, arg], GI);
   CH.startWatch = (id) => run(`Bắt đầu tính ngày cho huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "startWatch", [id], GI);
@@ -529,7 +566,7 @@
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
     if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối trong ví.";
-    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test.", NotEnoughPoints: "Chưa đủ điểm mùa.", Spoiled: "Nông sản đã hỏng (quá 7 ngày).", NotTradable: "Món này không đổi được (huy hiệu gắn với ví của bạn).", NotTransferable: "Vật phẩm chỉ đổi được qua chợ.", OfferClosed: "Đề nghị này đã xong hoặc đã huỷ.", OfferExpired: "Đề nghị đã hết hạn.", NotForYou: "Đề nghị này không dành cho bạn.", WrongItem: "Món đưa ra không khớp với đề nghị.", AlreadyClaimed: "Đã nhận nông sản của cây này rồi.", AlreadyEarned: "Bạn đã có huy hiệu này.", NotEligible: "Chưa đủ điều kiện.", NotForSale: "Món này không bán.", BadOffer: "Đề nghị không hợp lệ.", NotAHat: "Đó không phải nón." };
+    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test.", NotEnoughPoints: "Chưa đủ điểm mùa.", Spoiled: "Nông sản đã hỏng (quá 7 ngày).", NotTradable: "Món này không đổi được (huy hiệu gắn với ví của bạn).", NotTransferable: "Vật phẩm chỉ đổi được qua chợ.", OfferClosed: "Đề nghị này đã xong hoặc đã huỷ.", OfferExpired: "Đề nghị đã hết hạn.", NotForYou: "Đề nghị này không dành cho bạn.", WrongItem: "Món đưa ra không khớp với đề nghị.", AlreadyClaimed: "Đã nhận nông sản của cây này rồi.", AlreadyEarned: "Bạn đã có huy hiệu này.", NotEligible: "Chưa đủ điều kiện.", NotForSale: "Món này không bán.", BadOffer: "Đề nghị không hợp lệ.", NotAHat: "Đó không phải nón.", NotDoneYet: "Bạn chưa làm xong nhiệm vụ này.", AllDone: "Bạn đã xong mọi nhiệm vụ." };
     for (const [k, v] of Object.entries(map)) if (m.includes(k)) return v;
     return m.length > 180 ? m.slice(0, 180) + "…" : m;
   };

@@ -29,6 +29,7 @@ async function main() {
     await verify("DemoPriceFeed", d.demoFeed, [d.demoFeedSeed]);
   }
   if (d.items) await verify("FarmItems", d.items, [d.forwarder, d.game, d.coop, d.pond]);
+  if (d.quests) await verify("FarmQuests", d.quests, [d.forwarder, d.game, d.coop, d.pond, d.items, d.usdc]);
   console.log(`Xem: https://testnet.snowtrace.io/address/${d.game}#code`);
 }
 

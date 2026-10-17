@@ -106,6 +106,29 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 .hint b{color:var(--ink)}
 
 
+
+/* Nhiệm vụ */
+.qtrack{position:absolute;top:52px;left:max(12px,env(safe-area-inset-left,0px));z-index:3;display:flex;align-items:center;gap:8px;max-width:min(360px,calc(100% - 24px));background:rgba(15,24,20,.86);border:1px solid var(--line);border-radius:12px;padding:7px 11px;color:var(--ink);font:600 12.5px var(--body);cursor:pointer;text-align:left}
+.qtrack:hover{border-color:var(--straw)}
+.qtrack b{color:var(--straw)}
+.qtrack small{display:block;color:var(--muted);font-weight:500;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qtrack.ready{border-color:var(--straw);box-shadow:0 0 0 2px rgba(242,193,78,.25),0 0 18px rgba(242,193,78,.35);animation:q-pulse 1.4s ease-in-out infinite}
+.qtrack .qn{flex:none;width:26px;height:26px;border-radius:50%;background:var(--straw);color:var(--deep);display:grid;place-items:center;font:800 12px var(--display)}
+@keyframes q-pulse{50%{box-shadow:0 0 0 4px rgba(242,193,78,.15),0 0 26px rgba(242,193,78,.5)}}
+.qlist{display:flex;flex-direction:column;gap:6px}
+.q{display:grid;grid-template-columns:28px 1fr auto;gap:4px 10px;align-items:center;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--board-2)}
+.q .qi{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:800 12px var(--display);background:#33483c;color:var(--muted)}
+.q b{font-size:13.5px}
+.q small{color:var(--muted);font-size:12px;line-height:1.4;grid-column:2/3}
+.q .rw{font-size:12px;font-weight:800;color:var(--leaf);white-space:nowrap}
+.q.done{opacity:.6}
+.q.done .qi{background:#2f4639;color:var(--leaf)}
+.q.cur{border-color:var(--straw);box-shadow:inset 0 0 0 1px rgba(242,193,78,.3)}
+.q.cur .qi{background:var(--straw);color:var(--deep)}
+.q.lock{opacity:.45}
+.q .btn{grid-column:3;padding:4px 9px;font-size:12px}
+@media (max-width:760px){.qtrack{top:auto;bottom:calc(64px + env(safe-area-inset-bottom,0px))}.app.open .qtrack{display:none}}
+@media (prefers-reduced-motion:reduce){.qtrack.ready{animation:none}}
 /* Kho đồ */
 .inv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
 .inv{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--board-2);text-align:center;min-width:0}
@@ -161,6 +184,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
         <button class="btn" id="sp2" data-speed="2" title="1 tuần mỗi 3 giây">7×</button>
       </div>
       <button class="btn storm" id="b-storm" title="Ép giá AVAX giảm mạnh trong 1,5 ngày">Gây bão</button>
+      <button class="btn" id="b-quest">Nhiệm vụ</button>
       <button class="btn" id="b-inv">Kho đồ</button>
       <button class="btn" id="b-design">Bản thiết kế</button>
       <button class="btn primary" id="b-wallet">Kết nối ví</button>
@@ -170,6 +194,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
     <canvas id="cv" aria-label="Bản đồ nông trại. Dùng WASD hoặc phím mũi tên để đi, E để tương tác, hoặc chạm vào bản đồ."></canvas>
     <div class="hint"><b>WASD / mũi tên</b> để đi · <b>E</b> để mở · hoặc chạm vào khu vực</div>
     <div class="log" id="log" aria-live="polite"></div>
+    <button class="qtrack" id="qtrack" hidden></button>
     <button class="prompt" id="prompt" hidden></button>
     <div class="toast" id="toast" role="status" hidden></div>
     <section class="panel" id="panel" hidden aria-labelledby="p-title">
@@ -708,6 +733,45 @@ function homeDecor(spr,t){
   if(has(2006))spr.push({y:18.6,f:()=>{const x=39.5*T,y=18.4*T;ctx.fillStyle='rgba(0,0,0,.2)';ell(ctx,x+2,y+4,12,3);ctx.fillStyle='#7a4f2c';ctx.fillRect(x-11,y-6,22,4);ctx.fillRect(x-9,y-2,2,6);ctx.fillRect(x+7,y-2,2,6);ctx.fillStyle='#c99a4a';ell(ctx,x,y-8,10,3);
     [['#e2442f',-6,-11],['#f2b33d',-1,-12],['#b5c43c',5,-11],['#86d36f',1,-15],['#e8604a',-4,-15]].forEach(([c,dx,dy])=>{ctx.fillStyle=c;ell(ctx,x+dx,y+dy,3.2,3)})}});
 }
+/* ---------- Nhiệm vụ (FarmQuests) ---------- */
+function questRows(cur,ready){
+  let html='',lastCh=0;
+  (CH.QUESTS||[]).forEach((q,i)=>{
+    if(q.ch!==lastCh){lastCh=q.ch;html+=`<p class="label">Chương ${q.ch}: ${esc(CH.CHAPTERS[q.ch])}</p>`}
+    const st=cur==null?'lock':i<cur?'done':i===cur?'cur':'lock';
+    const btn=st==='cur'?(ready?'<button class="btn primary" data-act="q-claim">Nhận thưởng</button>':`<button class="btn" data-act="q-go" data-arg="${q.zone}">Đi tới</button>`):'';
+    html+=`<div class="q ${st}"><span class="qi">${st==='done'?'✓':i+1}</span><b>${esc(q.title)}</b><span class="rw">+${q.reward} USDC</span><small>${esc(q.how)}</small>${btn}</div>`;
+  });
+  return '<div class="qlist">'+html+'</div>';
+}
+PANELS.quests={
+  title:'Nhiệm vụ',tag:'Từ dễ đến khó',chains:[['C-Chain','c'],['Fee manager','x']],
+  stats:()=>'<p class="note">Làm lần lượt từng nhiệm vụ để học DeFi từng bước. Mỗi nhiệm vụ được kiểm tra thật trên blockchain và thưởng USDC test. Bấm <b>Kết nối ví</b> để bắt đầu.</p>'+(CH.QUESTS?questRows(null,false):''),
+  actions:()=>''
+};
+LIVE.quests={
+  title:'Nhiệm vụ',tag:'Từ dễ đến khó',chains:[['C-Chain','c'],['Fee manager','x']],
+  stats:()=>{const Q=CH.data?.quest;if(!CH.hasQuests)return '<p class="note">Nhiệm vụ chưa được bật trên mạng này.</p>';if(!Q)return '<p class="note">Đang đọc nhiệm vụ…</p>';
+    return kv([['Đã xong',`${Math.min(Q.index,CH.QUESTS.length)}/${CH.QUESTS.length} nhiệm vụ`],['Thưởng tiếp theo',Q.done?'Đã nhận hết':'+'+nf(Q.reward,0)+' USDC test']])+busyLine()+
+      (Q.done?'<p class="note ok"><b>Bạn đã hoàn thành mọi nhiệm vụ!</b> Giờ bạn là lão nông DeFi thật sự.</p>':'')+questRows(Q.index,Q.ready)},
+  actions:()=>'<p class="note">Mỗi nhiệm vụ được contract kiểm tra trên blockchain, không gian lận được. Phải làm xong nhiệm vụ trước mới mở nhiệm vụ sau. Thưởng là USDC test, không có giá trị thật.</p>'
+};
+function renderQuestTrack(){
+  const el=$('#qtrack');if(!el)return;
+  const Q=CH.live&&CH.data?.quest;
+  if(!Q||Q.done||!CH.QUESTS){el.hidden=true;return}
+  const q=CH.QUESTS[Q.index];
+  const html=`<span class="qn">${Q.index+1}</span><span><b>${Q.ready?'Nhận thưởng!':'Nhiệm vụ'}</b> ${esc(q.title)} · +${q.reward} USDC<small>${esc(q.how)}</small></span>`;
+  if(el.dataset.h!==html){el.dataset.h=html;el.innerHTML=html}
+  el.classList.toggle('ready',!!Q.ready);el.hidden=false;
+}
+$('#qtrack').onclick=()=>openZone('quests');
+function questTarget(){
+  const Q=CH.live&&CH.data?.quest;if(!Q||Q.done||Q.ready||!CH.QUESTS)return null;
+  if(window.FarmTutorial&&FarmTutorial.step>=0)return null;
+  const z=Z[CH.QUESTS[Q.index].zone];if(!z||current===z.id)return null;
+  return {x:(z.sx!=null?z.sx:z.ax)*T,y:((z.sx!=null?z.sy:z.ay)-1.4)*T};
+}
 const panelFor=id=>(CH.live&&CH.data&&LIVE[id])||PANELS[id];
 const cAct=(p,ok)=>p.then(r=>{if(ok)toast(ok);return r}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
 const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>icm(zone,'C-Chain',`Đã ghi lên chain · tx ${short(r.hash)}`),400)};
@@ -731,6 +795,8 @@ Object.assign(ACT,{
   'mk-cancel'(id){cAct(CH.cancelOffer(Number(id)).then(r=>{sent('market','cancelOffer(#'+id+')')(r);loadOffers(true)}),'Đã huỷ, đồ về lại kho.')},
   'w-gift'(){const to=($('#gift-to')?.value||'').trim(),v=amt('gift-amt'),tok=$('#gift-tok')?.value||'usdc';if(!/^0x[0-9a-fA-F]{40}$/.test(to))return toast('Nhập địa chỉ ví 0x… của bạn bè.');if(!v)return;if(to.toLowerCase()===String(CH.account).toLowerCase())return toast('Không tự tặng cho mình được.');
     cAct(CH.gift(tok,to,v).then(sent('gate','transfer('+short(to)+')')),'Đã tặng '+v+' '+(tok==='gavax'?'gAVAX':'USDC')+'.')},
+  'q-claim'(){const i=CH.data?.quest?.index;cAct(CH.completeQuest().then(r=>{sent('gate','complete() · nhiệm vụ '+(i+1))(r);floater(player.x,player.y-1.6,'+'+CH.QUESTS[i].reward+' USDC','#f2c14e')}),'Xong nhiệm vụ "'+CH.QUESTS[i].title+'"! +'+CH.QUESTS[i].reward+' USDC test.')},
+  'q-go'(zone){if(Z[zone]){closePanel();FARM.walkTo(Z[zone].ax,Z[zone].ay,zone)}else openZone(zone)},
   'w-privy-use'(a){toast('Đang chuyển ví…');CH.usePrivyWallet(a).then(acc=>{const w=$('#b-wallet');w.textContent=short(acc);icm('gate','C-Chain','Chuyển sang ví Privy '+short(acc));toast('Đã chuyển sang ví '+short(acc)+'.');openZone('wallet')}).catch(e=>toast(CH.errMsg(e)))},
   'w-privy-export'(){CH.exportPrivyKey().catch(e=>toast(CH.errMsg(e)))},
   'w-watch'(){CH.watchToken('usdc').then(()=>CH.hasCoop&&CH.watchToken('gavax')).then(()=>toast('Đã thêm token vào MetaMask.')).catch(e=>toast(CH.errMsg(e)))},
@@ -792,6 +858,7 @@ CH.on?.(()=>{
 });
 $('#b-wallet').onclick=()=>openZone('wallet');
 $('#b-inv').onclick=()=>openZone('inventory');
+$('#b-quest').onclick=()=>openZone('quests');
 
 /* morph: patch DOM in place so buttons under the cursor survive re-renders */
 function morph(el,html){
@@ -840,6 +907,7 @@ function renderLog(){
 }
 let lastP=0;
 function renderHud(){
+  renderQuestTrack();
   $('#h-day').textContent=CH.live?`${Math.floor(st.day)%365+1}/365`:nf(Math.floor(st.day),0);
   const p1=priceAgo(1),ch=(st.price-p1)/p1;
   const hp=$('#h-price');hp.textContent=`$${nf(st.price)} ${ch>=0?'▲':'▼'}${nf(Math.abs(ch)*100,1)}%`;hp.className=ch>=0?'up':'down';
@@ -1054,6 +1122,9 @@ function render(now){
   for(let i=floaters.length-1;i>=0;i--){const f=floaters[i];f.t+=1/60/2;if(f.t>=1){floaters.splice(i,1);continue}
     if(!FLAGS.floaters)continue;
     const x=f.x*T,y=f.y*T-f.t*30;ctx.globalAlpha=1-f.t*f.t;ctx.lineWidth=3;ctx.strokeStyle='#1c2a23';ctx.strokeText(f.text,x,y);ctx.fillStyle=f.color;ctx.fillText(f.text,x,y);ctx.globalAlpha=1}
+  {const p=questTarget();if(p){const b=reduce?0:Math.sin(t*5)*5,x=Math.round(p.x),y=Math.round(p.y+b);
+    ctx.fillStyle='#2a1d14';ctx.beginPath();ctx.moveTo(x-12,y-17);ctx.lineTo(x+12,y-17);ctx.lineTo(x,y);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#86d36f';ctx.beginPath();ctx.moveTo(x-9,y-15);ctx.lineTo(x+9,y-15);ctx.lineTo(x,y-3);ctx.closePath();ctx.fill()}}
   run('worldTop',ctx,t);
   // weather (screen space)
   ctx.setTransform(1,0,0,1,0,0);

@@ -82,6 +82,7 @@ const ITEMS_ABI = [
   "error WrongItem(uint256 want, uint256 got)",
   "error NotAHat()",
 ];
+const QUESTS_ABI = ["function complete()", "error NotDoneYet(uint256 quest)", "error AllDone()"];
 const POND_ABI = [
   "function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)",
   "function zapIn(uint256 usdcAmount, uint256 minShares)",
@@ -101,7 +102,8 @@ const tokenIface = new ethers.Interface(TOKEN_ABI);
 const coopIface = new ethers.Interface(COOP_ABI);
 const pondIface = new ethers.Interface(POND_ABI);
 const itemsIface = new ethers.Interface(ITEMS_ABI);
-const ALL = [gameIface, coopIface, pondIface, itemsIface, tokenIface];
+const questsIface = new ethers.Interface(QUESTS_ABI);
+const ALL = [gameIface, coopIface, pondIface, itemsIface, questsIface, tokenIface];
 
 // Which contracts the fee manager pays for, which functions on each, and where tokens may be approved.
 function targets(config) {
@@ -112,6 +114,7 @@ function targets(config) {
   if (config.coop) t.set(a(config.coop), { iface: coopIface });
   if (config.pond) t.set(a(config.pond), { iface: pondIface });
   if (config.items) t.set(a(config.items), { iface: itemsIface });
+  if (config.quests) t.set(a(config.quests), { iface: questsIface });
   return t;
 }
 
