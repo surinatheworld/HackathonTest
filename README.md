@@ -76,6 +76,10 @@ Các bản trước vẫn còn trên Fuji, xem `contracts/deployments/fuji-gasle
 ```
 index.html                      Game 2D (canvas)
 prototype/chain.js              Ví trong game / MetaMask, ký EIP-712, gửi qua fee manager
+prototype/art.js                Vẽ làng: nền, ao, nhà mái ngói, cổng làng, sạp chợ, rừng viền, nhân vật
+prototype/fx.js                 Ngày/đêm, đèn, thời tiết, đom đóm, bướm, khói, hiệu ứng giao dịch
+prototype/minimap.js            Bản đồ nhỏ và bản đồ lớn, bấm để đi tới khu
+prototype/ui.css, ui.js         Giao diện HUD, bảng, nút, màn hình chào
 prototype/chain-config.js       Địa chỉ contract (sinh bởi deploy-gasless.js)
 functions/api/relay.js          Fee manager (Cloudflare Pages Function)
 functions/_lib/relay-core.js    Chính sách + gửi giao dịch, dùng chung cho Pages và server local
