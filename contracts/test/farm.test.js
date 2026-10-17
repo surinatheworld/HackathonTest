@@ -205,6 +205,8 @@ describe("L1 game loop", () => {
     await token.connect(alice).approve(vault, usdc(100));
     await land.connect(alice).plant(1, usdc(100));
     await relay();
+    // start at the beginning of a game day so the two same-day waterings never straddle midnight
+    await time.increaseTo(Math.ceil(((await time.latest()) + 1) / DAY) * DAY + 1);
     await land.connect(alice).water(1);
     await expect(land.connect(alice).water(1)).to.be.revertedWithCustomError(land, "AlreadyWateredToday");
     await time.increase(DAY);

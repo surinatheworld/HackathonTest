@@ -136,6 +136,8 @@ describe("Gasless farm on Fuji (ERC-2771 fee manager)", () => {
     await relay(alice, token, "faucet", []);
     await relay(alice, token, "approve", [await game.getAddress(), ethers.MaxUint256]);
     await relay(alice, game, "plant", [1, usdc(100)]);
+    // start at the beginning of a game day so the two same-day waterings never straddle midnight
+    await time.increaseTo(Math.ceil(((await time.latest()) + 1) / DAY) * DAY + 1);
     await relay(alice, game, "water", [1]);
     await expect(relay(alice, game, "water", [1])).to.be.reverted; // once per game day
     await time.increase(DAY);

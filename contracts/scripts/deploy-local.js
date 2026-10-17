@@ -16,6 +16,7 @@ async function main() {
   const coop = await deploy("FarmCoop", fwd, usdc, gavax, demoFeed, 365 * 86400, DAY_LENGTH);
   const pond = await deploy("FarmPond", fwd, usdc, gavax);
   const butler = await deploy("ButlerAccount", me, DAY_LENGTH);
+  const items = await deploy("FarmItems", fwd, game, coop, pond);
   await send(usdc.mint(me, U(120000)));
   await send(usdc.approve(game, U(50000)));
   await send(game.fundRewards(U(50000)));
@@ -27,7 +28,7 @@ async function main() {
   await send(pond.addLiquidity(U(20000), ethers.parseUnits("2000", 18), 0));
   const out = {
     chainId: 31337, dayLength: DAY_LENGTH, forwarder: fwd.target, usdc: usdc.target, gavax: gavax.target, game: game.target,
-    coop: coop.target, pond: pond.target, butler: butler.target, demoFeed: demoFeed.target,
+    coop: coop.target, pond: pond.target, butler: butler.target, items: items.target, demoFeed: demoFeed.target,
   };
   save("local", out);
   console.log("Local gasless stack:", out);

@@ -11,6 +11,7 @@
       "function allowance(address,address) view returns (uint256)",
       "function approve(address,uint256) returns (bool)",
       "function faucet()",
+      "function transfer(address to, uint256 amount) returns (bool)",
     ],
     game: [
       "function deposit(uint256)",
@@ -48,6 +49,30 @@
       "function reserveUsdc() view returns (uint256)",
       "function reserveAvax() view returns (uint256)",
       "function positionOf(address) view returns (uint256 shares, uint256 usdcPart, uint256 avaxPart, uint256 valueUsdc)",
+    ],
+    items: [
+      "function itemsOf(address) view returns (uint256[] ids, uint256[] amounts)",
+      "function pointsOf(address) view returns (uint256)",
+      "function hatOf(address) view returns (uint256)",
+      "function today() view returns (uint64)",
+      "function claimedCrop(uint256) view returns (bool)",
+      "function canEarn(address,uint256,uint256) view returns (bool)",
+      "function fishSince(address) view returns (uint64)",
+      "function safeSince(address) view returns (uint64)",
+      "function feePerUnit() view returns (uint256)",
+      "function feePool() view returns (uint256)",
+      "function offerCount() view returns (uint256)",
+      "function offer(uint256) view returns (tuple(address maker, address taker, uint64 expires, bool open, uint256[] giveIds, uint256[] giveAmts, uint256[] wantIds, uint256[] wantAmts))",
+      "function claimHarvest(uint256 cropId)",
+      "function discard(uint256 id, uint256 amount)",
+      "function startWatch(uint256 badgeId)",
+      "function claimBadge(uint256 badgeId, uint256 arg)",
+      "function buy(uint256 id, uint256 amount)",
+      "function craftFruitTray(uint256 chiliId, uint256 mangoId, uint256 durianId)",
+      "function equipHat(uint256 id)",
+      "function makeOffer((uint256[] giveIds, uint256[] giveAmts, uint256[] wantIds, uint256[] wantAmts) legs, address taker, uint256 durationDays)",
+      "function acceptOffer(uint256 offerId, uint256[] payIds)",
+      "function cancelOffer(uint256 offerId)",
     ],
     forwarder: ["function nonces(address) view returns (uint256)"],
   };
@@ -96,6 +121,9 @@
   const avaxR = c.gavax ? new E.Contract(c.gavax, ABI.usdc, rp) : null;
   const coopI = new E.Interface(ABI.coop);
   const pondI = new E.Interface(ABI.pond);
+  const itemsR = c.items ? new E.Contract(c.items, ABI.items, rp) : null;
+  const itemsI = new E.Interface(ABI.items);
+  CH.hasItems = !!itemsR;
   CH.hasCoop = !!(coopR && avaxR);
   CH.hasPond = !!(pondR && avaxR);
   const domain = { name: "NongTraiDeFi", version: "1", chainId: c.chainId, verifyingContract: c.forwarder };
@@ -231,7 +259,79 @@
     };
     const [coop, pond, gavax] = await Promise.all([readCoop(a), readPond(a), avaxR ? avaxR.balanceOf(a) : 0n]);
     Object.assign(CH.data, { coop, pond, gavax: toAvax(gavax) });
+    CH.data.items = await readItems(a, CH.data.crops).catch((e) => { console.error("[items]", e); return CH.data.items || null; });
     emit();
+  };
+
+  // ---------- Kho đồ (FarmItems) ----------
+  const KIND = 1_000_000_000n;
+  /** Catalog shown in the game. Badges: soulbound, earned by a DeFi lesson. Cosmetics: points or crafting. */
+  const CATALOG = {
+    1: { name: "Ớt", icon: "chili", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây ớt. Hỏng sau 7 ngày." },
+    2: { name: "Xoài", icon: "mango", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây xoài. Hỏng sau 7 ngày." },
+    3: { name: "Sầu riêng", icon: "durian", rarity: "hiếm", kind: "produce", desc: "Thu hoạch từ cây sầu riêng 90 ngày. Hỏng sau 7 ngày." },
+    1001: { name: "Hạt giống đầu tiên", icon: "seed", rarity: "huy hiệu", kind: "badge", desc: "Gửi tiền vào Ruộng rau lần đầu.", lesson: "Gửi tiết kiệm" },
+    1002: { name: "Kiên nhẫn", icon: "hourglass", rarity: "huy hiệu", kind: "badge", desc: "Thu hoạch một cây sầu riêng 90 ngày.", lesson: "Khóa càng lâu, lãi càng cao" },
+    1003: { name: "Người nuôi cá", icon: "fish", rarity: "huy hiệu", kind: "badge", desc: "Giữ cá trong Ao cá 3 ngày.", lesson: "Góp thanh khoản" },
+    1004: { name: "Vay an toàn", icon: "shield", rarity: "huy hiệu", kind: "badge", desc: "Đang vay ở Hợp tác xã mà giữ hệ số an toàn từ 1,5 trở lên trong 3 ngày.", lesson: "Vay có trách nhiệm" },
+    1005: { name: "Nông dân chăm chỉ", icon: "can", rarity: "huy hiệu", kind: "badge", desc: "Tưới cây 7 ngày liên tục.", lesson: "Kiên trì" },
+    1006: { name: "Lão nông", icon: "crown", rarity: "huyền thoại", kind: "badge", desc: "Có đủ 5 huy hiệu trên.", lesson: "Tốt nghiệp DeFi cơ bản" },
+    1007: { name: "Cúp mùa vụ", icon: "trophy", rarity: "huyền thoại", kind: "badge", desc: "Top 10 cuối mùa. Mỗi mùa chỉ có 10 cúp." },
+    2001: { name: "Nón lá đỏ", icon: "hat", color: "#d9534a", rarity: "thường", kind: "cosmetic", price: 20, desc: "Đội lên cho nhân vật." },
+    2002: { name: "Nón lá xanh", icon: "hat", color: "#5fae6a", rarity: "thường", kind: "cosmetic", price: 20, desc: "Đội lên cho nhân vật." },
+    2003: { name: "Nón lá vàng", icon: "hat", color: "#f2c14e", rarity: "hiếm", kind: "cosmetic", price: 150, desc: "Đội lên cho nhân vật. Đắt nhất tiệm." },
+    2004: { name: "Đèn lồng nhà", icon: "lantern", rarity: "thường", kind: "cosmetic", price: 40, desc: "Treo trước Nhà mình." },
+    2005: { name: "Hàng rào hoa", icon: "flowers", rarity: "thường", kind: "cosmetic", price: 60, desc: "Trồng quanh Nhà mình." },
+    2006: { name: "Mâm ngũ quả", icon: "tray", rarity: "hiếm", kind: "cosmetic", desc: "Ghép từ 3 ớt + 2 xoài + 1 sầu riêng còn tươi. Bày ở Nhà mình." },
+  };
+  CH.CATALOG = CATALOG;
+  CH.BADGES = [1001, 1002, 1003, 1004, 1005, 1006, 1007];
+  CH.SHOP = [2001, 2002, 2003, 2004, 2005];
+  CH.itemInfo = (id) => {
+    const n = BigInt(id);
+    const kind = n / KIND;
+    if (kind >= 1n && kind <= 3n) return { ...CATALOG[Number(kind)], produceKind: Number(kind), day: Number(n % KIND) };
+    return CATALOG[Number(n)] || { name: "Vật phẩm #" + id, icon: "box", rarity: "thường", kind: "other", desc: "" };
+  };
+
+  async function readItems(a, crops) {
+    if (!itemsR) return null;
+    const harvested = crops.filter((cr) => cr.status === "Harvested");
+    const [inv, points, hat, today, fishSince, safeSince, feePerUnit, claimed] = await Promise.all([
+      itemsR.itemsOf(a), itemsR.pointsOf(a), itemsR.hatOf(a), itemsR.today(), itemsR.fishSince(a), itemsR.safeSince(a), itemsR.feePerUnit(),
+      Promise.all(harvested.map((cr) => itemsR.claimedCrop(cr.id))),
+    ]);
+    const durian = harvested.find((cr) => cr.tier === 2);
+    const can = await Promise.all(CH.BADGES.slice(0, 6).map((b) => itemsR.canEarn(a, b, b === 1002 && durian ? durian.id : 0)));
+    const t = Number(today);
+    const list = inv.ids.map((id, i) => {
+      const info = CH.itemInfo(id);
+      const fresh = info.kind === "produce" ? t <= info.day + 7 : true;
+      return { id: id.toString(), amount: Number(inv.amounts[i]), ...info, fresh, daysLeft: info.kind === "produce" ? info.day + 7 - t : null };
+    });
+    const owns = (id) => list.some((x) => x.id === String(id));
+    return {
+      list, points: Number(points), hat: Number(hat), today: t, feePerUnit: Number(feePerUnit),
+      unclaimed: harvested.filter((_, i) => !claimed[i]).map((cr) => cr.id),
+      durianCrop: durian ? durian.id : 0,
+      badges: CH.BADGES.map((b, i) => ({ id: b, ...CATALOG[b], owned: owns(b), can: i < 6 ? can[i] : false })),
+      fishSince: Number(fishSince), safeSince: Number(safeSince),
+    };
+  }
+
+  /** The last `n` market offers, newest first. */
+  CH.loadOffers = async (n = 25) => {
+    if (!itemsR) return [];
+    const count = Number(await itemsR.offerCount());
+    const ids = [];
+    for (let i = count - 1; i >= 0 && ids.length < n; i--) ids.push(i);
+    const now = Math.floor(Date.now() / 1000);
+    const rows = await Promise.all(ids.map((i) => itemsR.offer(i)));
+    return rows.map((o, k) => ({
+      id: ids[k], maker: o.maker, taker: o.taker, expires: Number(o.expires), open: o.open && Number(o.expires) >= now,
+      give: o.giveIds.map((id, j) => ({ id: id.toString(), amount: Number(o.giveAmts[j]), ...CH.itemInfo(id) })),
+      want: o.wantIds.map((id, j) => ({ id: id.toString(), amount: Number(o.wantAmts[j]), ...CH.itemInfo(id) })),
+    }));
   };
 
   async function readCoop(a) {
@@ -327,12 +427,61 @@
   CH.lendClaim = () => run("Thu lãi ruộng rau", c.game, gameI, "claim", [], GAS.lend);
   CH.lendWithdraw = (v) => run("Rút khỏi ruộng rau", c.game, gameI, "withdraw", [U(v)], GAS.lend);
   CH.plant = async (tier, v) => { await ensureAllowance(U(v)); return run("Trồng cây", c.game, gameI, "plant", [tier, U(v)], GAS.plant); };
-  CH.harvest = (id) => run(`Thu hoạch cây #${id}`, c.game, gameI, "harvest", [id], GAS.harvest);
+  // Harvest, then pick up the produce for the Kho đồ in the same flow (a second gasless signature).
+  CH.harvest = async (id) => {
+    const rc = await run(`Thu hoạch cây #${id}`, c.game, gameI, "harvest", [id], GAS.harvest);
+    if (itemsR) await CH.claimHarvest(id).catch((e) => console.warn("[items] claimHarvest", e));
+    return rc;
+  };
   CH.uproot = (id) => run(`Nhổ sớm cây #${id}`, c.game, gameI, "uproot", [id], GAS.uproot);
   CH.water = (id) => run(`Tưới cây #${id}`, c.game, gameI, "water", [id], GAS.water);
   CH.collect = () => run("Gom điểm mùa", c.game, gameI, "collect", [], GAS.small);
   CH.steal = (addr) => run("Hái trộm vườn hàng xóm", c.game, gameI, "steal", [E.getAddress(addr)], GAS.small);
   CH.setGuard = (b) => run(b ? "Thuê người giữ vườn" : "Bỏ người giữ vườn", c.game, gameI, "setGuard", [b], GAS.small);
+
+  // ---------- Kho đồ ----------
+  const GI = 250_000;
+  CH.claimHarvest = (cropId) => run(`Nhận nông sản cây #${cropId}`, c.items, itemsI, "claimHarvest", [cropId], GI);
+  CH.claimBadge = (id, arg = 0) => run(`Nhận huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "claimBadge", [id, arg], GI);
+  CH.startWatch = (id) => run(`Bắt đầu tính ngày cho huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "startWatch", [id], GI);
+  CH.buyItem = (id, n = 1) => run(`Mua ${CATALOG[id]?.name || id}`, c.items, itemsI, "buy", [id, n], GI);
+  CH.equipHat = (id) => run(id ? `Đội ${CATALOG[id]?.name}` : "Đội nón lá thường", c.items, itemsI, "equipHat", [id], GI);
+  CH.discard = (id, n) => run("Bỏ nông sản hỏng", c.items, itemsI, "discard", [BigInt(id), n], GI);
+  /** Uses the freshest batch of each kind the player holds. */
+  CH.craftTray = () => {
+    const list = CH.data?.items?.list || [];
+    const pick = (k, need) => list.filter((x) => x.produceKind === k && x.fresh && x.amount >= need).sort((p, q) => q.day - p.day)[0];
+    const a = pick(1, 3), b = pick(2, 2), d = pick(3, 1);
+    if (!a || !b || !d) return Promise.reject(new Error("Cần 3 ớt, 2 xoài và 1 sầu riêng còn tươi."));
+    return run("Ghép Mâm ngũ quả", c.items, itemsI, "craftFruitTray", [BigInt(a.id), BigInt(b.id), BigInt(d.id)], 300_000);
+  };
+  /** give: {id, amount} a concrete item the player holds. want: {kind (1-3) | id (cosmetic), amount}. */
+  CH.makeOffer = ({ giveId, giveAmount, wantKind, wantId, wantAmount, taker, days = 3 }) => {
+    const want = wantKind ? BigInt(wantKind) * KIND : BigInt(wantId);
+    const legs = { giveIds: [BigInt(giveId)], giveAmts: [BigInt(giveAmount)], wantIds: [want], wantAmts: [BigInt(wantAmount)] };
+    return run("Đăng đề nghị đổi đồ", c.items, itemsI, "makeOffer", [legs, taker ? E.getAddress(taker) : E.ZeroAddress, days], 600_000);
+  };
+  /** Pays each wanted leg with the freshest matching batch from the inventory. */
+  CH.acceptOffer = (o) => {
+    const list = CH.data?.items?.list || [];
+    const pay = o.want.map((w) => {
+      const kind = BigInt(w.id) / KIND;
+      const m = kind >= 1n && kind <= 3n
+        ? list.filter((x) => x.produceKind === Number(kind) && x.fresh && x.amount >= w.amount).sort((p, q) => q.day - p.day)[0]
+        : list.find((x) => x.id === w.id && x.amount >= w.amount);
+      if (!m) throw new Error(`Bạn chưa có đủ ${w.amount} ${w.name}${kind >= 1n && kind <= 3n ? " còn tươi" : ""}.`);
+      return BigInt(m.id);
+    });
+    return run(`Đổi đồ (đề nghị #${o.id})`, c.items, itemsI, "acceptOffer", [o.id, pay], 600_000);
+  };
+  CH.cancelOffer = (id) => run(`Huỷ đề nghị #${id}`, c.items, itemsI, "cancelOffer", [id], 400_000);
+  /** Gift test USDC or gAVAX to a friend. */
+  CH.gift = (token, to, v) => {
+    const addr = E.getAddress(to);
+    return token === "gavax"
+      ? run(`Tặng ${v} gAVAX`, c.gavax, usdcI, "transfer", [addr, A(v)], GAS.usdc)
+      : run(`Tặng ${v} USDC`, c.usdc, usdcI, "transfer", [addr, U(v)], GAS.usdc);
+  };
 
   // ---------- Hợp tác xã ----------
   CH.avaxFaucet = () => run("Nhận 20 gAVAX test", c.gavax, usdcI, "faucet", [], GAS.usdc);
@@ -377,7 +526,7 @@
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
     if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối trong ví.";
-    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test." };
+    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test.", NotEnoughPoints: "Chưa đủ điểm mùa.", Spoiled: "Nông sản đã hỏng (quá 7 ngày).", NotTradable: "Món này không đổi được (huy hiệu gắn với ví của bạn).", NotTransferable: "Vật phẩm chỉ đổi được qua chợ.", OfferClosed: "Đề nghị này đã xong hoặc đã huỷ.", OfferExpired: "Đề nghị đã hết hạn.", NotForYou: "Đề nghị này không dành cho bạn.", WrongItem: "Món đưa ra không khớp với đề nghị.", AlreadyClaimed: "Đã nhận nông sản của cây này rồi.", AlreadyEarned: "Bạn đã có huy hiệu này.", NotEligible: "Chưa đủ điều kiện.", NotForSale: "Món này không bán.", BadOffer: "Đề nghị không hợp lệ.", NotAHat: "Đó không phải nón." };
     for (const [k, v] of Object.entries(map)) if (m.includes(k)) return v;
     return m.length > 180 ? m.slice(0, 180) + "…" : m;
   };

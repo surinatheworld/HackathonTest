@@ -554,8 +554,8 @@ function farmer(g, x, y, o) {
   // nón lá
   const ty = hy - 2;
   g.fillStyle = OUT; g.beginPath(); g.moveTo(X - 15, ty + 1); g.lineTo(X + 15, ty + 1); g.lineTo(X, ty - 14); g.closePath(); g.fill();
-  g.fillStyle = '#ecd79c'; g.beginPath(); g.moveTo(X - 13, ty); g.lineTo(X + 13, ty); g.lineTo(X, ty - 12); g.closePath(); g.fill();
-  g.fillStyle = '#d4bb78'; g.beginPath(); g.moveTo(X, ty - 12); g.lineTo(X + 13, ty); g.lineTo(X + 5, ty); g.closePath(); g.fill();
+  g.fillStyle = o.hat || '#ecd79c'; g.beginPath(); g.moveTo(X - 13, ty); g.lineTo(X + 13, ty); g.lineTo(X, ty - 12); g.closePath(); g.fill();
+  g.fillStyle = o.hat ? 'rgba(0,0,0,.18)' : '#d4bb78'; g.beginPath(); g.moveTo(X, ty - 12); g.lineTo(X + 13, ty); g.lineTo(X + 5, ty); g.closePath(); g.fill();
   R(g, '#c4a25c', X - 9, ty - 4, 18, 1); R(g, '#c4a25c', X - 5, ty - 8, 10, 1);
   R(g, '#fff1c4', X - 6, ty - 6, 3, 1);
   R(g, '#a07c3a', X - 13, ty, 26, 1);

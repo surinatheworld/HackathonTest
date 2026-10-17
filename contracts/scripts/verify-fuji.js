@@ -28,6 +28,7 @@ async function main() {
     await verify("MockYieldSource", d.yieldSource, [d.usdc, d.game, 500, d.dayLength]);
     await verify("DemoPriceFeed", d.demoFeed, [d.demoFeedSeed]);
   }
+  if (d.items) await verify("FarmItems", d.items, [d.forwarder, d.game, d.coop, d.pond]);
   console.log(`Xem: https://testnet.snowtrace.io/address/${d.game}#code`);
 }
 

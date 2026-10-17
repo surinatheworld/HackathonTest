@@ -35,6 +35,7 @@ const GAME_ABI = [
 const TOKEN_ABI = [
   "function faucet()",
   "function approve(address spender, uint256 amount)",
+  "function transfer(address to, uint256 amount)",
   "error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)",
   "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
 ];
@@ -52,6 +53,34 @@ const COOP_ABI = [
   "error StalePrice(uint256 updatedAt)",
   "error BadPrice()",
   "error NoLiquidity(uint256 available)",
+];
+const ITEMS_ABI = [
+  "function claimHarvest(uint256 cropId)",
+  "function discard(uint256 id, uint256 amount)",
+  "function startWatch(uint256 badgeId)",
+  "function claimBadge(uint256 badgeId, uint256 arg)",
+  "function buy(uint256 id, uint256 amount)",
+  "function craftFruitTray(uint256 chiliId, uint256 mangoId, uint256 durianId)",
+  "function equipHat(uint256 id)",
+  "function makeOffer((uint256[] giveIds, uint256[] giveAmts, uint256[] wantIds, uint256[] wantAmts) legs, address taker, uint256 durationDays)",
+  "function acceptOffer(uint256 offerId, uint256[] payIds)",
+  "function cancelOffer(uint256 offerId)",
+  "error NotTransferable()",
+  "error NotYourCrop()",
+  "error NotHarvested()",
+  "error AlreadyClaimed()",
+  "error AlreadyEarned()",
+  "error NotEligible()",
+  "error NotForSale()",
+  "error NotEnoughPoints(uint256 have, uint256 need)",
+  "error Spoiled(uint256 id)",
+  "error NotTradable(uint256 id)",
+  "error BadOffer()",
+  "error OfferClosed()",
+  "error OfferExpired()",
+  "error NotForYou()",
+  "error WrongItem(uint256 want, uint256 got)",
+  "error NotAHat()",
 ];
 const POND_ABI = [
   "function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)",
@@ -71,7 +100,8 @@ const gameIface = new ethers.Interface(GAME_ABI);
 const tokenIface = new ethers.Interface(TOKEN_ABI);
 const coopIface = new ethers.Interface(COOP_ABI);
 const pondIface = new ethers.Interface(POND_ABI);
-const ALL = [gameIface, coopIface, pondIface, tokenIface];
+const itemsIface = new ethers.Interface(ITEMS_ABI);
+const ALL = [gameIface, coopIface, pondIface, itemsIface, tokenIface];
 
 // Which contracts the fee manager pays for, which functions on each, and where tokens may be approved.
 function targets(config) {
@@ -81,6 +111,7 @@ function targets(config) {
   if (config.gavax) t.set(a(config.gavax), { iface: tokenIface, spenders: [config.coop, config.pond].filter(Boolean).map(a) });
   if (config.coop) t.set(a(config.coop), { iface: coopIface });
   if (config.pond) t.set(a(config.pond), { iface: pondIface });
+  if (config.items) t.set(a(config.items), { iface: itemsIface });
   return t;
 }
 

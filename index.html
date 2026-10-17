@@ -105,6 +105,29 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 .hint{position:absolute;top:12px;left:max(12px,env(safe-area-inset-left,0px));z-index:3;background:rgba(15,24,20,.78);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px;color:var(--muted);pointer-events:none}
 .hint b{color:var(--ink)}
 
+
+/* Kho đồ */
+.inv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.inv{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--board-2);text-align:center;min-width:0}
+.inv .ic{font-size:26px;line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+.inv b{font-size:12.5px;line-height:1.2}
+.inv small{font-size:11px;color:var(--muted);line-height:1.3}
+.inv .n{position:absolute;top:5px;right:7px;font-size:11px;font-weight:800;color:var(--ink);background:var(--deep);border-radius:999px;padding:0 6px}
+.inv .btn{padding:3px 8px;font-size:11.5px;margin-top:2px}
+.inv.r-hiem{border-color:#4f8fbf;box-shadow:inset 0 0 0 1px rgba(108,189,224,.25)}
+.inv.r-huyen{border-color:var(--straw);box-shadow:inset 0 0 0 1px rgba(242,193,78,.3),0 0 14px rgba(242,193,78,.18)}
+.inv.r-huyhieu{border-color:#6b8f5a}
+.inv.spoiled{opacity:.6}
+.inv.spoiled .ic{filter:grayscale(1)}
+.inv.locked{opacity:.55}
+.inv.locked .ic{filter:grayscale(1) brightness(.8)}
+.hat-dot{display:inline-block;width:22px;height:14px;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.offer{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--board-2);align-items:center}
+.offer .swap{font-size:13px;font-weight:700}
+.offer small{color:var(--muted);font-size:11.5px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:460px){.pair{grid-template-columns:1fr}}
+
 @media (max-width:760px){
   .panel{top:auto;left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));width:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:58%}
   .app.open .log,.app.open .hint{display:none}
@@ -138,6 +161,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
         <button class="btn" id="sp2" data-speed="2" title="1 tuần mỗi 3 giây">7×</button>
       </div>
       <button class="btn storm" id="b-storm" title="Ép giá AVAX giảm mạnh trong 1,5 ngày">Gây bão</button>
+      <button class="btn" id="b-inv">Kho đồ</button>
       <button class="btn" id="b-design">Bản thiết kế</button>
       <button class="btn primary" id="b-wallet">Kết nối ví</button>
     </div>
@@ -614,12 +638,99 @@ if(CH.hasCoop)LIVE.coop={
   actions:()=>`<p class="label">Kho thóc (thế chấp)</p><label class="field" for="amt-coll"><input id="amt-coll" inputmode="decimal" value="10"><span>gAVAX</span></label><div class="row"><button class="btn" data-act="c-coll-dep">Gửi gAVAX</button><button class="btn" data-act="c-coll-out">Rút gAVAX</button><button class="btn" data-act="c-avax-faucet">Nhận 20 gAVAX test</button></div>
     <p class="label">Phân bón (khoản vay)</p>${field('amt-coop','USDC','30')}<div class="row"><button class="btn primary" data-act="c-coop-borrow">Vay phân bón</button><button class="btn" data-act="c-coop-repay">Trả nợ</button></div>`
 };
+/* ---------- Kho đồ (FarmItems on Fuji) ---------- */
+const ICON={chili:'🌶️',mango:'🥭',durian:'🍈',seed:'🌱',hourglass:'⏳',fish:'🐟',shield:'🛡️',can:'💧',crown:'👑',trophy:'🏆',lantern:'🏮',flowers:'🌸',tray:'🧺',box:'📦'};
+const rcls=r=>r==='hiếm'?'r-hiem':r==='huyền thoại'?'r-huyen':r==='huy hiệu'?'r-huyhieu':'';
+const iconOf=it=>it.icon==='hat'?`<span class="hat-dot" style="background:${it.color}"></span>`:(ICON[it.icon]||'📦');
+const owned=id=>(CH.data?.items?.list||[]).find(x=>x.id===String(id));
+function playerHat(){const h=CH.live&&CH.data?.items?.hat;return h&&CH.CATALOG?.[h]?CH.CATALOG[h].color:null}
+PANELS.inventory={
+  title:'Kho đồ',tag:'Nông sản · huy hiệu · đồ trang trí',chains:[['C-Chain','c'],['Fee manager','x']],
+  stats:()=>`<p class="note">Kho đồ lưu thật trên blockchain. Bấm <b>Kết nối ví</b> để mở kho đồ của bạn.</p>
+    <div class="inv-grid">${[1,2,3,1001,2001,2006].map(k=>{const it=CH.itemInfo?CH.itemInfo(k>3?k:k*1e9):{name:'',icon:'box'};return `<div class="inv locked ${rcls(it.rarity)}"><span class="ic">${iconOf(it)}</span><b>${esc(it.name||'')}</b><small>${esc(it.rarity||'')}</small></div>`}).join('')}</div>`,
+  actions:()=>`<p class="note"><b>Nông sản</b> có được khi thu hoạch cây, để lâu 7 ngày sẽ hỏng. <b>Huy hiệu</b> có được khi làm xong một bài học DeFi và không bán được. <b>Đồ trang trí</b> mua bằng điểm mùa.</p>`
+};
+LIVE.inventory={
+  title:'Kho đồ',tag:'Nông sản · huy hiệu · đồ trang trí',chains:[['C-Chain','c'],['Fee manager','x']],
+  stats:()=>{const I=CH.data?.items;if(!CH.hasItems)return '<p class="note">Kho đồ chưa được bật trên mạng này.</p>';if(!I)return '<p class="note">Đang đọc kho đồ…</p>';
+    const produce=I.list.filter(x=>x.kind==='produce'),cos=I.list.filter(x=>x.kind==='cosmetic');
+    const tile=(x,btns)=>`<div class="inv ${rcls(x.rarity)} ${x.fresh?'':'spoiled'}"><span class="n">×${x.amount}</span><span class="ic">${iconOf(x)}</span><b>${esc(x.name)}</b><small>${x.kind==='produce'?(x.fresh?(x.daysLeft>0?'Còn '+x.daysLeft+' ngày':'Hỏng sau hôm nay'):'Đã hỏng'):esc(x.rarity)}</small>${btns||''}</div>`;
+    return kv([['Điểm mùa',nf(I.points,0)+' điểm'],['Phí đổi đồ',I.feePerUnit+' điểm mỗi món']])+busyLine()+
+      (I.unclaimed.length?`<div class="item"><div><b>Có ${I.unclaimed.length} cây đã thu hoạch chưa nhận nông sản</b><br><small>Nhận về để đổi hoặc ghép đồ.</small></div><button class="btn primary" data-act="inv-claim">Nhận</button></div>`:'')+
+      '<p class="label">Nông sản</p>'+(produce.length?'<div class="inv-grid">'+produce.map(x=>tile(x,x.fresh?'':`<button class="btn" data-act="inv-discard" data-arg="${x.id}">Bỏ đi</button>`)).join('')+'</div>':'<p class="note">Chưa có. Trồng cây ở <b>Vườn cây</b>, thu hoạch là có nông sản.</p>')+
+      '<p class="label">Đồ trang trí</p>'+(cos.length?'<div class="inv-grid">'+cos.map(x=>tile(x,x.icon==='hat'?(I.hat===Number(x.id)?'<button class="btn on" data-act="inv-hat" data-arg="0">Đang đội</button>':`<button class="btn" data-act="inv-hat" data-arg="${x.id}">Đội</button>`):'<small>Bày ở Nhà mình</small>')).join('')+'</div>':'<p class="note">Chưa có. Mua ở tiệm bên dưới bằng điểm mùa.</p>')+
+      '<p class="label">Huy hiệu mùa vụ</p><div class="inv-grid">'+I.badges.map(b=>{let s;
+        if(b.owned)s='<span class="pill g">Đã có</span>';
+        else if(b.can)s=`<button class="btn primary" data-act="inv-badge" data-arg="${b.id}">Nhận</button>`;
+        else if(b.id===1003&&!I.fishSince&&CH.data.pond&&CH.data.pond.value>0)s=`<button class="btn" data-act="inv-watch" data-arg="1003">Bắt đầu tính</button>`;
+        else if(b.id===1004&&!I.safeSince&&CH.data.coop&&CH.data.coop.debt>0&&CH.data.coop.health>=1.5)s=`<button class="btn" data-act="inv-watch" data-arg="1004">Bắt đầu tính</button>`;
+        else if(b.id===1003&&I.fishSince)s=`<small>Đã giữ ${Math.max(0,I.today-I.fishSince)}/3 ngày</small>`;
+        else if(b.id===1004&&I.safeSince)s=`<small>Đã giữ ${Math.max(0,I.today-I.safeSince)}/3 ngày</small>`;
+        else s=`<small>${esc(b.desc)}</small>`;
+        return `<div class="inv ${rcls(b.rarity)} ${b.owned?'':'locked'}" title="${esc(b.desc)}"><span class="ic">${iconOf(b)}</span><b>${esc(b.name)}</b>${s}</div>`}).join('')+'</div>';
+  },
+  actions:()=>`<p class="label">Tiệm đồ (trả bằng điểm mùa)</p><div class="inv-grid">${(CH.SHOP||[]).map(id=>{const it=CH.CATALOG[id];return `<div class="inv ${rcls(it.rarity)}"><span class="ic">${iconOf(it)}</span><b>${esc(it.name)}</b><small>${it.price} điểm</small><button class="btn" data-act="inv-buy" data-arg="${id}">Mua</button></div>`}).join('')}</div>
+    <div class="item"><div><b>🧺 Ghép Mâm ngũ quả</b><br><small>3 ớt + 2 xoài + 1 sầu riêng, đều còn tươi.</small></div><button class="btn" data-act="inv-craft">Ghép</button></div>
+    <p class="note">Huy hiệu là bằng chứng bạn đã học xong một bài DeFi, gắn với ví của bạn và <b>không bán được</b>. Vật phẩm không đổi ra tiền: chỉ đổi đồ lấy đồ ở <b>Chợ phiên</b>.</p>`
+};
+let OFFERS={list:[],at:0,busy:false};
+function loadOffers(force){if(!CH.hasItems||OFFERS.busy||(!force&&Date.now()-OFFERS.at<10000))return;OFFERS.busy=true;CH.loadOffers().then(l=>{OFFERS.list=l;OFFERS.at=Date.now()}).catch(e=>console.warn(e)).finally(()=>{OFFERS.busy=false;renderStats()})}
+const legTxt=l=>l.map(x=>x.amount+' '+(x.kind==='produce'?'':'')+esc(x.name)).join(' + ');
+function barterHtml(){
+  if(!CH.hasItems)return '';
+  loadOffers(false);
+  const me=String(CH.account).toLowerCase(),I=CH.data?.items,now=Date.now()/1000;
+  const open=OFFERS.list.filter(o=>o.open&&(o.taker==='0x0000000000000000000000000000000000000000'||o.taker.toLowerCase()===me||o.maker.toLowerCase()===me)).slice(0,10);
+  const rows=open.map(o=>{const mine=o.maker.toLowerCase()===me;const left=Math.max(0,o.expires-now);
+    return `<div class="offer"><div><span class="swap">${legTxt(o.give)} ⇄ ${legTxt(o.want)}</span><br><small>${mine?'Đề nghị của bạn':'Từ '+short(o.maker)}${o.taker!=='0x0000000000000000000000000000000000000000'?' · riêng cho '+short(o.taker):''} · còn ${nf(left/60,0)} phút</small></div>${mine?`<button class="btn danger" data-act="mk-cancel" data-arg="${o.id}">Huỷ</button>`:`<button class="btn primary" data-act="mk-accept" data-arg="${o.id}">Đổi</button>`}</div>`}).join('');
+  const mineItems=(I?.list||[]).filter(x=>(x.kind==='produce'&&x.fresh)||x.kind==='cosmetic');
+  const giveOpts=mineItems.map(x=>`<option value="${x.id}">${esc(x.name)} (có ${x.amount})</option>`).join('');
+  const wantOpts='<option value="k1">Ớt</option><option value="k2">Xoài</option><option value="k3">Sầu riêng</option>'+[2001,2002,2003,2004,2005,2006].map(id=>`<option value="${id}">${esc(CH.CATALOG[id].name)}</option>`).join('');
+  return `<p class="label">Đổi đồ với người chơi</p>${rows||'<p class="note">Chưa có đề nghị nào. Đăng đề nghị đầu tiên bên dưới.</p>'}
+    <p class="label">Đăng đề nghị đổi</p>
+    ${giveOpts?`<div class="pair"><label class="field" for="bx-give"><select id="bx-give">${giveOpts}</select></label><label class="field" for="bx-gn"><input id="bx-gn" inputmode="numeric" value="1"><span>món</span></label></div>
+    <div class="pair"><label class="field" for="bx-want"><select id="bx-want">${wantOpts}</select></label><label class="field" for="bx-wn"><input id="bx-wn" inputmode="numeric" value="1"><span>món</span></label></div>
+    <label class="field" for="bx-to"><input id="bx-to" placeholder="Địa chỉ bạn bè (bỏ trống = ai cũng đổi được)" autocomplete="off" spellcheck="false"></label>
+    <div class="row"><button class="btn primary" data-act="mk-offer">Đăng đề nghị</button></div>
+    <p class="note">Đồ bạn đưa ra được chợ giữ hộ đến khi có người đổi, hoặc bạn huỷ. Đề nghị hết hạn sau 3 ngày game. Phí ${I?.feePerUnit??1} điểm mùa cho mỗi món bạn đưa ra. Vật phẩm chỉ đổi lấy vật phẩm, không đổi ra tiền.</p>`:'<p class="note">Bạn chưa có món nào để đổi. Thu hoạch cây để có nông sản, hoặc mua đồ trang trí trong <b>Kho đồ</b>.</p>'}`;
+}
+if(LIVE.market&&CH.hasItems){const base=LIVE.market.stats;LIVE.market.stats=()=>base()+barterHtml()}
+{const base=PANELS.wallet.actions;PANELS.wallet.actions=()=>(CH.live?`<p class="label">Tặng tiền test cho bạn bè</p>
+  <label class="field" for="gift-to"><input id="gift-to" placeholder="0x… địa chỉ ví bạn bè" autocomplete="off" spellcheck="false"></label>
+  <div class="pair"><label class="field" for="gift-amt"><input id="gift-amt" inputmode="decimal" value="10"></label><label class="field" for="gift-tok"><select id="gift-tok"><option value="usdc">USDC</option><option value="gavax">gAVAX</option></select></label></div>
+  <div class="row"><button class="btn" data-act="w-gift">Tặng</button></div>`:'')+base()}
+/* home decorations from owned cosmetics */
+function homeDecor(spr,t){
+  const has=id=>CH.live&&owned(id);if(!CH.live||!CH.data?.items)return;
+  const X=34*T,Y=18*T,Wd=5*T,Ht=4*T;
+  if(has(2004))spr.push({y:21.9,f:()=>{for(const lx of [X+8,X+Wd-8]){const sw=Math.sin(t*2+lx)*1.2;ctx.fillStyle='#4a2f17';ctx.fillRect(lx,Y+Ht*.58-2,1,6);ctx.fillStyle='#c8392b';ell(ctx,lx+sw,Y+Ht*.58+9,4.5,5.5);ctx.fillStyle='#f2c14e';ctx.fillRect(lx-3+sw,Y+Ht*.58+3,7,1);ctx.fillRect(lx-3+sw,Y+Ht*.58+14,7,1)}}});
+  if(has(2005))for(let i=0;i<4;i++){const yy=19.2+i*.7;spr.push({y:yy,f:()=>{ctx.fillStyle='#2b4f24';ell(ctx,39.3*T,yy*T,9,6);ctx.fillStyle='#3f7c33';ell(ctx,39.3*T,yy*T-1,8,5);for(let k=0;k<4;k++){ctx.fillStyle=['#f19ab0','#f6d65c','#f7f1e8','#e8604a'][(i+k)%4];ctx.fillRect(39.3*T-6+k*4,yy*T-4+(k%2)*3,2,2)}}})}
+  if(has(2006))spr.push({y:18.6,f:()=>{const x=39.5*T,y=18.4*T;ctx.fillStyle='rgba(0,0,0,.2)';ell(ctx,x+2,y+4,12,3);ctx.fillStyle='#7a4f2c';ctx.fillRect(x-11,y-6,22,4);ctx.fillRect(x-9,y-2,2,6);ctx.fillRect(x+7,y-2,2,6);ctx.fillStyle='#c99a4a';ell(ctx,x,y-8,10,3);
+    [['#e2442f',-6,-11],['#f2b33d',-1,-12],['#b5c43c',5,-11],['#86d36f',1,-15],['#e8604a',-4,-15]].forEach(([c,dx,dy])=>{ctx.fillStyle=c;ell(ctx,x+dx,y+dy,3.2,3)})}});
+}
 const panelFor=id=>(CH.live&&CH.data&&LIVE[id])||PANELS[id];
 const cAct=(p,ok)=>p.then(r=>{if(ok)toast(ok);return r}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
 const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>icm(zone,'C-Chain',`Đã ghi lên chain · tx ${short(r.hash)}`),400)};
 Object.assign(ACT,{
   'w-game'(){connectWith('game')},
   'w-mm'(){connectWith('metamask')},
+  'inv-claim'(){const ids=CH.data?.items?.unclaimed||[];ids.reduce((p,id)=>p.then(()=>CH.claimHarvest(id)),Promise.resolve()).then(()=>{toast('Đã nhận nông sản vào Kho đồ.');icm('home','C-Chain','Nhận nông sản vào Kho đồ')}).catch(e=>toast(CH.errMsg(e)))},
+  'inv-badge'(id){id=Number(id);cAct(CH.claimBadge(id,id===1002?CH.data.items.durianCrop:0).then(r=>{sent('home','claimBadge('+CH.CATALOG[id].name+')')(r);floatZ('home','Huy hiệu mới!','#f2c14e')}),'Đã nhận huy hiệu '+CH.CATALOG[id].name+'.')},
+  'inv-watch'(id){cAct(CH.startWatch(Number(id)).then(sent('home','startWatch()')),'Đã bắt đầu tính ngày. Quay lại sau 3 ngày game.')},
+  'inv-buy'(id){cAct(CH.buyItem(Number(id),1).then(sent('market','buy('+CH.CATALOG[id].name+')')),'Đã mua '+CH.CATALOG[id].name+'.')},
+  'inv-hat'(id){cAct(CH.equipHat(Number(id)).then(sent('home','equipHat()')),Number(id)?'Đã đội '+CH.CATALOG[id].name+'.':'Đã đội nón lá thường.')},
+  'inv-discard'(id){const x=owned(id);if(!x)return;cAct(CH.discard(id,x.amount).then(sent('home','discard()')),'Đã bỏ nông sản hỏng.')},
+  'inv-craft'(){cAct(CH.craftTray().then(r=>{sent('home','craftFruitTray()')(r);floatZ('home','Mâm ngũ quả!','#f2c14e')}),'Đã ghép Mâm ngũ quả, bày ở Nhà mình.')},
+  'mk-offer'(){const give=$('#bx-give')?.value,gn=parseInt($('#bx-gn')?.value,10),want=$('#bx-want')?.value,wn=parseInt($('#bx-wn')?.value,10),to=($('#bx-to')?.value||'').trim();
+    if(!give||!(gn>0)||!want||!(wn>0))return toast('Chọn món và số lượng lớn hơn 0.');
+    if(to&&!/^0x[0-9a-fA-F]{40}$/.test(to))return toast('Địa chỉ bạn bè không hợp lệ.');
+    const x=owned(give);if(!x||x.amount<gn)return toast('Bạn không có đủ món này.');
+    const w=want.startsWith('k')?{wantKind:Number(want.slice(1))}:{wantId:Number(want)};
+    cAct(CH.makeOffer({giveId:give,giveAmount:gn,...w,wantAmount:wn,taker:to||null,days:3}).then(r=>{sent('market','makeOffer()')(r);loadOffers(true)}),'Đã đăng đề nghị đổi.')},
+  'mk-accept'(id){const o=OFFERS.list.find(x=>x.id===Number(id));if(!o)return;let p;try{p=CH.acceptOffer(o)}catch(e){return toast(e.message)}cAct(p.then(r=>{sent('market','acceptOffer(#'+id+')')(r);floatZ('market','Đổi xong!','#86d36f');loadOffers(true)}),'Đổi đồ thành công.')},
+  'mk-cancel'(id){cAct(CH.cancelOffer(Number(id)).then(r=>{sent('market','cancelOffer(#'+id+')')(r);loadOffers(true)}),'Đã huỷ, đồ về lại kho.')},
+  'w-gift'(){const to=($('#gift-to')?.value||'').trim(),v=amt('gift-amt'),tok=$('#gift-tok')?.value||'usdc';if(!/^0x[0-9a-fA-F]{40}$/.test(to))return toast('Nhập địa chỉ ví 0x… của bạn bè.');if(!v)return;if(to.toLowerCase()===String(CH.account).toLowerCase())return toast('Không tự tặng cho mình được.');
+    cAct(CH.gift(tok,to,v).then(sent('gate','transfer('+short(to)+')')),'Đã tặng '+v+' '+(tok==='gavax'?'gAVAX':'USDC')+'.')},
   'w-privy-use'(a){toast('Đang chuyển ví…');CH.usePrivyWallet(a).then(acc=>{const w=$('#b-wallet');w.textContent=short(acc);icm('gate','C-Chain','Chuyển sang ví Privy '+short(acc));toast('Đã chuyển sang ví '+short(acc)+'.');openZone('wallet')}).catch(e=>toast(CH.errMsg(e)))},
   'w-privy-export'(){CH.exportPrivyKey().catch(e=>toast(CH.errMsg(e)))},
   'w-watch'(){CH.watchToken('usdc').then(()=>CH.hasCoop&&CH.watchToken('gavax')).then(()=>toast('Đã thêm token vào MetaMask.')).catch(e=>toast(CH.errMsg(e)))},
@@ -680,6 +791,7 @@ CH.on?.(()=>{
   renderHud();renderStats();
 });
 $('#b-wallet').onclick=()=>openZone('wallet');
+$('#b-inv').onclick=()=>openZone('inventory');
 
 /* morph: patch DOM in place so buttons under the cursor survive re-renders */
 function morph(el,html){
@@ -925,7 +1037,8 @@ function render(now){
   SPOTS.forEach(([x,y],i)=>spr.push({y,f:()=>tree(ctx,x,y,st.locks[i])}));
   spr.push({y:9.6,f:()=>{farmer(ctx,42.5,9.6+Math.sin(t*2)*.02,{shirt:'#7b5ea7',dir:-1,moving:false,walk:0})}});
   if(st.butler.hired){spr.push({y:butler.y,f:()=>farmer(ctx,butler.x,butler.y,{shirt:'#2f8f83',dir:butler.dir,moving:true,walk:butler.walk,antenna:true})})}
-  spr.push({y:player.y,f:()=>farmer(ctx,player.x,player.y,{shirt:'#2f5d9e',dir:player.dir,moving:player.moving,walk:player.walk})});
+  homeDecor(spr,t);
+  spr.push({y:player.y,f:()=>farmer(ctx,player.x,player.y,{shirt:'#2f5d9e',hat:playerHat(),dir:player.dir,moving:player.moving,walk:player.walk})});
   run('sprites',spr,t);
   spr.sort((a,b)=>a.y-b.y).forEach(s=>s.f());
   // near ring
