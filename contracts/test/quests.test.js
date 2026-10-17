@@ -27,6 +27,7 @@ async function deploy() {
   const quests = await (await F("FarmQuests")).deploy(fwd, game, coop, pond, items, token);
   await token.mint(owner, usdc(100_000));
   await gavax.mint(owner, avax(1_000));
+  await token.transfer(quests, usdc(5_000)); // reward pool
   await token.approve(game, ethers.MaxUint256);
   await game.fundRewards(usdc(10_000));
   await token.approve(coop, ethers.MaxUint256);
@@ -150,6 +151,25 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(1);
     expect(await quests.check(alice, 2)).to.equal(true);
     expect(await quests.progress(alice)).to.equal(1n);
+  });
+
+  it("pays rewards from the funded pool, never mints, and waits when the pool is dry", async () => {
+    const { owner, alice, token, quests } = await deploy();
+    await token.connect(alice).faucet();
+    const supply = await token.totalSupply();
+    await quests.connect(alice).complete();
+    expect(await token.totalSupply()).to.equal(supply);
+    expect(await quests.rewardPool()).to.equal(usdc(4_990));
+    await expect(quests.connect(alice).withdrawPool(alice, 1)).to.be.revertedWithCustomError(quests, "OwnableUnauthorizedAccount");
+    await quests.withdrawPool(owner, usdc(4_990));
+    const game = await ethers.getContractAt("FarmGame", await quests.game());
+    await token.connect(alice).approve(game, ethers.MaxUint256);
+    await game.connect(alice).deposit(usdc(10));
+    await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "RewardPoolEmpty").withArgs(0, usdc(10));
+    expect(await quests.progress(alice)).to.equal(1n);
+    await token.transfer(quests, usdc(10));
+    await quests.connect(alice).complete();
+    expect(await quests.progress(alice)).to.equal(2n);
   });
 
   it("works gasless for a wallet with no AVAX", async () => {

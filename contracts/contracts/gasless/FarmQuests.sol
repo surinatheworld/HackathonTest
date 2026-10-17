@@ -3,6 +3,10 @@ pragma solidity ^0.8.24;
 
 import {ERC2771Context} from "@openzeppelin/contracts/metatx/ERC2771Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 interface IQuestGame {
     struct Crop {
@@ -47,15 +51,13 @@ interface IQuestItems {
     function offer(uint256 offerId) external view returns (Offer memory);
 }
 
-interface IQuestToken {
-    function balanceOf(address who) external view returns (uint256);
-    function mint(address to, uint256 amount) external;
-}
-
 /// Nhiệm vụ: 18 quests in 5 chapters, easy to hard, unlocked one at a time. Each one is checked on-chain from the
-/// state of the farm contracts, so nobody can claim a quest they did not do. The reward is test USDC, minted from the
-/// testnet token; on mainnet the reward would be season points or cosmetics, never money.
-contract FarmQuests is ERC2771Context, ReentrancyGuard {
+/// state of the farm contracts, so nobody can claim a quest they did not do. Rewards are paid from a reward pool the
+/// team funds up front (a marketing budget held by this contract), never minted: when the pool runs dry, quests wait
+/// until it is topped up. The owner (the team multisig) can only add to the pool or take unused rewards back.
+contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     uint256 public constant COUNT = 18;
     uint256 private constant KIND = 1e9;
     uint256 private constant OFFER_SCAN = 100;
@@ -64,24 +66,27 @@ contract FarmQuests is ERC2771Context, ReentrancyGuard {
     IQuestCoop public immutable coop;
     IQuestPond public immutable pond;
     IQuestItems public immutable items;
-    IQuestToken public immutable usdc;
+    IERC20 public immutable usdc;
 
     /// number of quests completed; the next one to do is quest number `progress[user]`
     mapping(address => uint256) public progress;
 
     event QuestCompleted(address indexed user, uint256 indexed quest, uint256 reward);
+    event PoolWithdrawn(address indexed to, uint256 amount);
 
     error AllDone();
     error NotDoneYet(uint256 quest);
+    error RewardPoolEmpty(uint256 available, uint256 needed);
 
     constructor(address forwarder, address game_, address coop_, address pond_, address items_, address usdc_)
         ERC2771Context(forwarder)
+        Ownable(msg.sender)
     {
         game = IQuestGame(game_);
         coop = IQuestCoop(coop_);
         pond = IQuestPond(pond_);
         items = IQuestItems(items_);
-        usdc = IQuestToken(usdc_);
+        usdc = IERC20(usdc_);
     }
 
     /// Test USDC (6 decimals) for each quest, growing with difficulty.
@@ -124,10 +129,23 @@ contract FarmQuests is ERC2771Context, ReentrancyGuard {
         quest = progress[u];
         if (quest >= COUNT) revert AllDone();
         if (!check(u, quest)) revert NotDoneYet(quest);
-        progress[u] = quest + 1;
         reward = rewardOf(quest);
-        usdc.mint(u, reward);
+        uint256 pool = usdc.balanceOf(address(this));
+        if (pool < reward) revert RewardPoolEmpty(pool, reward);
+        progress[u] = quest + 1;
         emit QuestCompleted(u, quest, reward);
+        usdc.safeTransfer(u, reward);
+    }
+
+    /// USDC left in the reward pool.
+    function rewardPool() external view returns (uint256) {
+        return usdc.balanceOf(address(this));
+    }
+
+    /// Takes unused rewards back (e.g. at the end of a season). Anyone can fund the pool with a plain transfer.
+    function withdrawPool(address to, uint256 amount) external onlyOwner {
+        emit PoolWithdrawn(to, amount);
+        usdc.safeTransfer(to, amount);
     }
 
     /// The current quest and whether it can be claimed now (for the game UI).
@@ -137,6 +155,18 @@ contract FarmQuests is ERC2771Context, ReentrancyGuard {
             ready = check(u, quest);
             reward = rewardOf(quest);
         }
+    }
+
+    function _msgSender() internal view override(Context, ERC2771Context) returns (address) {
+        return ERC2771Context._msgSender();
+    }
+
+    function _msgData() internal view override(Context, ERC2771Context) returns (bytes calldata) {
+        return ERC2771Context._msgData();
+    }
+
+    function _contextSuffixLength() internal view override(Context, ERC2771Context) returns (uint256) {
+        return ERC2771Context._contextSuffixLength();
     }
 
     // ---------- checks ----------

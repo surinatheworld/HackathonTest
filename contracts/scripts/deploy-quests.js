@@ -1,6 +1,7 @@
 // npm run deploy:quests
 // Adds FarmQuests (Nhiệm vụ: 18 quests checked on-chain) next to the live Fuji stack without
-// redeploying it, and patches the game and fee manager configs. FarmQuests has no owner.
+// redeploying it, funds its reward pool (QUEST_POOL USDC, default 20,000) and patches the game and fee
+// manager configs. Rewards come from that pool, never minted. The owner can only take unused rewards back.
 const fs = require("fs");
 const path = require("path");
 const { ethers, network } = require("hardhat");
@@ -15,6 +16,11 @@ async function main() {
   const quests = await (await ethers.getContractFactory("FarmQuests")).deploy(d.forwarder, d.game, d.coop, d.pond, d.items, d.usdc);
   await quests.waitForDeployment();
   console.log("FarmQuests", quests.target);
+  const usdc = await ethers.getContractAt("GaslessUSDC", d.usdc);
+  const pool = ethers.parseUnits(process.env.QUEST_POOL || "20000", 6);
+  await (await usdc.mint(me.address, pool)).wait();
+  await (await usdc.transfer(quests.target, pool)).wait();
+  console.log("Reward pool", ethers.formatUnits(await quests.rewardPool(), 6), "USDC");
 
   d.quests = quests.target;
   save("fuji-gasless", d);

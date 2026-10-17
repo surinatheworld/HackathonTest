@@ -18,7 +18,8 @@ async function main() {
   const butler = await deploy("ButlerAccount", me, DAY_LENGTH);
   const items = await deploy("FarmItems", fwd, game, coop, pond);
   const quests = await deploy("FarmQuests", fwd, game, coop, pond, items, usdc);
-  await send(usdc.mint(me, U(120000)));
+  await send(usdc.mint(me, U(140000)));
+  await send(usdc.transfer(quests, U(20000))); // quest reward pool
   await send(usdc.approve(game, U(50000)));
   await send(game.fundRewards(U(50000)));
   await send(usdc.approve(coop, U(50000)));

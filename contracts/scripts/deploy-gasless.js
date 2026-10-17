@@ -42,7 +42,9 @@ async function main() {
   const yieldSource = await deploy("MockYieldSource", usdc.target, game.target, 500, DAY_LENGTH);
 
   // Reward pool 50,000 USDC; 40,000 of it is parked in the yield source, the rest stays liquid.
-  await send(usdc.mint(me.address, U(50000 + 50000 + 20000)));
+  await send(usdc.mint(me.address, U(50000 + 50000 + 20000 + 20000)));
+  await send(usdc.transfer(quests.target, U(20000)));
+  console.log("Quest reward pool 20,000 USDC (rewards are paid from it, never minted)");
   await send(usdc.approve(game.target, U(50000)));
   await send(game.fundRewards(U(50000)));
   await send(game.setYieldSource(yieldSource.target));
