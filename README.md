@@ -33,7 +33,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
   - **Đồ trang trí**: mua bằng điểm mùa, hoặc ghép từ nông sản thành Mâm ngũ quả. Nón lá đội lên được cho nhân vật, đồ trang trí bày ở Nhà mình.
   - **Chợ đổi đồ**: chỉ đổi đồ lấy đồ, contract giữ đồ hộ trong lúc chờ. Phí là 1 điểm mùa cho mỗi món đưa ra. Vật phẩm chỉ đổi chủ qua chợ, nên không lách được phí, và **không có cách nào đổi vật phẩm ra USDC**.
-- **FarmQuests** (Nhiệm vụ): 18 nhiệm vụ chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy).
+- **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy).
   - Mở khoá lần lượt. Contract tự kiểm tra trên chain là người chơi đã làm thật.
   - Thưởng USDC test tăng dần từ 10 đến 200, tổng 760. Lên mainnet thì thưởng đổi sang điểm hoặc đồ trang trí, không trả tiền thật.
   - Contract không có owner.

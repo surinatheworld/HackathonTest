@@ -738,38 +738,47 @@ function homeDecor(spr,t){
     [['#e2442f',-6,-11],['#f2b33d',-1,-12],['#b5c43c',5,-11],['#86d36f',1,-15],['#e8604a',-4,-15]].forEach(([c,dx,dy])=>{ctx.fillStyle=c;ell(ctx,x+dx,y+dy,3.2,3)})}});
 }
 /* ---------- Nhiệm vụ (FarmQuests) ---------- */
+/* Nhiệm vụ 1 is connecting a wallet: it is checked here in the browser (the contract only sees wallets that are
+   already connected), so it has no USDC reward. The on-chain quests follow as nhiệm vụ 2 onwards. */
+const QWALLET={ch:1,title:'Kết nối ví',how:'Bấm Kết nối ví ở góc trên, đăng nhập bằng Google hoặc dùng ví có sẵn.',wallet:true};
+const questTotal=()=>(CH.QUESTS||[]).length+1;
 function questRows(cur,ready){
   let html='',lastCh=0;
-  (CH.QUESTS||[]).forEach((q,i)=>{
+  [QWALLET,...(CH.QUESTS||[])].forEach((q,k)=>{
     if(q.ch!==lastCh){lastCh=q.ch;html+=`<p class="label">Chương ${q.ch}: ${esc(CH.CHAPTERS[q.ch])}</p>`}
-    const st=cur==null?'lock':i<cur?'done':i===cur?'cur':'lock';
-    const btn=st==='cur'?(ready?'<button class="btn primary" data-act="q-claim">Nhận thưởng</button>':`<button class="btn" data-act="q-go" data-arg="${q.zone}">Đi tới</button>`):'';
-    html+=`<div class="q ${st}"><span class="qi">${st==='done'?'✓':i+1}</span><b>${esc(q.title)}</b><span class="rw">+${q.reward} USDC</span><small>${esc(q.how)}</small>${btn}</div>`;
+    const i=k-1,st=q.wallet?(cur==null?'cur':'done'):cur==null?'lock':i<cur?'done':i===cur?'cur':'lock';
+    const btn=st!=='cur'?'':q.wallet?'<button class="btn primary" data-act="q-wallet">Kết nối ví</button>':ready?'<button class="btn primary" data-act="q-claim">Nhận thưởng</button>':`<button class="btn" data-act="q-go" data-arg="${q.zone}">Đi tới</button>`;
+    html+=`<div class="q ${st}"><span class="qi">${st==='done'?'✓':k+1}</span><b>${esc(q.title)}</b><span class="rw">${q.wallet?'Mở nhiệm vụ':'+'+q.reward+' USDC'}</span><small>${esc(q.how)}</small>${btn}</div>`;
   });
   return '<div class="qlist">'+html+'</div>';
 }
 PANELS.quests={
   title:'Nhiệm vụ',tag:'Từ dễ đến khó',chains:[['C-Chain','c'],['Fee manager','x']],
-  stats:()=>'<p class="note">Làm lần lượt từng nhiệm vụ để học DeFi từng bước. Mỗi nhiệm vụ được kiểm tra thật trên blockchain và thưởng USDC test. Bấm <b>Kết nối ví</b> để bắt đầu.</p>'+(CH.QUESTS?questRows(null,false):''),
+  stats:()=>'<p class="note">Làm lần lượt từng nhiệm vụ để học DeFi từng bước. Nhiệm vụ đầu tiên là <b>Kết nối ví</b>. Các nhiệm vụ sau được kiểm tra thật trên blockchain và thưởng USDC test.</p>'+(CH.QUESTS?questRows(null,false):''),
   actions:()=>''
 };
 LIVE.quests={
   title:'Nhiệm vụ',tag:'Từ dễ đến khó',chains:[['C-Chain','c'],['Fee manager','x']],
   stats:()=>{const Q=CH.data?.quest;if(!CH.hasQuests)return '<p class="note">Nhiệm vụ chưa được bật trên mạng này.</p>';if(!Q)return '<p class="note">Đang đọc nhiệm vụ…</p>';
-    return kv([['Đã xong',`${Math.min(Q.index,CH.QUESTS.length)}/${CH.QUESTS.length} nhiệm vụ`],['Thưởng tiếp theo',Q.done?'Đã nhận hết':'+'+nf(Q.reward,0)+' USDC test']])+busyLine()+
+    return kv([['Đã xong',`${Math.min(Q.index,CH.QUESTS.length)+1}/${questTotal()} nhiệm vụ`],['Thưởng tiếp theo',Q.done?'Đã nhận hết':'+'+nf(Q.reward,0)+' USDC test']])+busyLine()+
       (Q.done?'<p class="note ok"><b>Bạn đã hoàn thành mọi nhiệm vụ!</b> Giờ bạn là lão nông DeFi thật sự.</p>':'')+questRows(Q.index,Q.ready)},
   actions:()=>'<p class="note">Mỗi nhiệm vụ được contract kiểm tra trên blockchain, không gian lận được. Phải làm xong nhiệm vụ trước mới mở nhiệm vụ sau. Thưởng là USDC test, không có giá trị thật.</p>'
 };
 function renderQuestTrack(){
   const el=$('#qtrack');if(!el)return;
-  const Q=CH.live&&CH.data?.quest;
-  if(!Q||Q.done||!CH.QUESTS){el.hidden=true;return}
-  const q=CH.QUESTS[Q.index];
-  const html=`<span class="qn">${Q.index+1}</span><span><span class="ql">${Q.ready?'Xong! Bấm nhận thưởng':`Nhiệm vụ ${Q.index+1}/${CH.QUESTS.length}`}</span>${esc(q.title)} <span class="qr">+${q.reward} USDC</span><small>${esc(q.how)}</small></span>`;
+  if(!CH.QUESTS){el.hidden=true;return}
+  let html;
+  if(!CH.account){html=`<span class="qn">1</span><span><span class="ql">Nhiệm vụ 1/${questTotal()}</span>${esc(QWALLET.title)}<small>${esc(QWALLET.how)}</small></span>`}
+  else{
+    const Q=CH.live&&CH.data?.quest;
+    if(!Q||Q.done){el.hidden=true;return}
+    const q=CH.QUESTS[Q.index];
+    html=`<span class="qn">${Q.index+2}</span><span><span class="ql">${Q.ready?'Xong! Bấm nhận thưởng':`Nhiệm vụ ${Q.index+2}/${questTotal()}`}</span>${esc(q.title)} <span class="qr">+${q.reward} USDC</span><small>${esc(q.how)}</small></span>`;
+  }
   if(el.dataset.h!==html){el.dataset.h=html;el.innerHTML=html}
-  el.classList.toggle('ready',!!Q.ready);el.hidden=false;
+  el.classList.toggle('ready',!!(CH.account&&CH.data?.quest?.ready));el.hidden=false;
 }
-$('#qtrack').onclick=()=>openZone('quests');
+$('#qtrack').onclick=()=>openZone(CH.account?'quests':'wallet');
 function questTarget(){
   const Q=CH.live&&CH.data?.quest;if(!Q||Q.done||Q.ready||!CH.QUESTS)return null;
   if(window.FarmTutorial&&FarmTutorial.step>=0)return null;
@@ -799,7 +808,8 @@ Object.assign(ACT,{
   'mk-cancel'(id){cAct(CH.cancelOffer(Number(id)).then(r=>{sent('market','cancelOffer(#'+id+')')(r);loadOffers(true)}),'Đã huỷ, đồ về lại kho.')},
   'w-gift'(){const to=($('#gift-to')?.value||'').trim(),v=amt('gift-amt'),tok=$('#gift-tok')?.value||'usdc';if(!/^0x[0-9a-fA-F]{40}$/.test(to))return toast('Nhập địa chỉ ví 0x… của bạn bè.');if(!v)return;if(to.toLowerCase()===String(CH.account).toLowerCase())return toast('Không tự tặng cho mình được.');
     cAct(CH.gift(tok,to,v).then(sent('gate','transfer('+short(to)+')')),'Đã tặng '+v+' '+(tok==='gavax'?'gAVAX':'USDC')+'.')},
-  'q-claim'(){const i=CH.data?.quest?.index;cAct(CH.completeQuest().then(r=>{sent('gate','complete() · nhiệm vụ '+(i+1))(r);floater(player.x,player.y-1.6,'+'+CH.QUESTS[i].reward+' USDC','#f2c14e')}),'Xong nhiệm vụ "'+CH.QUESTS[i].title+'"! +'+CH.QUESTS[i].reward+' USDC test.')},
+  'q-claim'(){const i=CH.data?.quest?.index;cAct(CH.completeQuest().then(r=>{sent('gate','complete() · nhiệm vụ '+(i+2))(r);floater(player.x,player.y-1.6,'+'+CH.QUESTS[i].reward+' USDC','#f2c14e')}),'Xong nhiệm vụ "'+CH.QUESTS[i].title+'"! +'+CH.QUESTS[i].reward+' USDC test.')},
+  'q-wallet'(){openZone('wallet')},
   'q-go'(zone){if(Z[zone]){closePanel();FARM.walkTo(Z[zone].ax,Z[zone].ay,zone)}else openZone(zone)},
   'w-privy-use'(a){toast('Đang chuyển ví…');CH.usePrivyWallet(a).then(acc=>{const w=$('#b-wallet');w.textContent=short(acc);icm('gate','C-Chain','Chuyển sang ví Privy '+short(acc));toast('Đã chuyển sang ví '+short(acc)+'.');openZone('wallet')}).catch(e=>toast(CH.errMsg(e)))},
   'w-privy-export'(){CH.exportPrivyKey().catch(e=>toast(CH.errMsg(e)))},
