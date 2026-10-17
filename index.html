@@ -418,17 +418,17 @@ const PANELS={
     ]),
     actions:()=>`<p class="label">Cách chơi</p>
       <ol class="steps">
-        <li>Đi bằng <b>WASD / phím mũi tên</b>, hoặc <b>chạm vào khu vực</b> trên bản đồ để nhân vật tự đi tới.</li>
-        <li>Đứng cạnh biển gỗ rồi bấm <b>E</b> (hoặc nút vàng ở dưới) để mở bảng.</li>
-        <li>Mỗi khu là một cơ chế DeFi thật. Mỗi thao tác chỉ cần <b>ký</b>: lá thư bay tới <b>Cổng làng</b>, nơi fee manager gửi giao dịch và trả gas hộ.</li>
-        <li>Yield chạy theo APY thật nên tăng chậm. Dùng <b>7×</b> để tua nhanh, <b>Gây bão</b> để xem rủi ro.</li>
+        <li>Đi bằng <b>WASD</b> hoặc phím mũi tên. Hoặc <b>chạm vào bản đồ</b>, nhân vật tự đi tới.</li>
+        <li>Đứng cạnh biển gỗ, bấm <b>E</b> (hoặc nút vàng) để mở.</li>
+        <li>Mỗi khu là một cách cho tiền sinh lời. Bạn chỉ cần bấm, <b>không mất phí giao dịch</b>.</li>
+        <li>Lãi tăng chậm như ngoài đời. Bấm <b>7×</b> để tua nhanh, <b>Gây bão</b> để thấy rủi ro.</li>
       </ol>
-      <p class="note">Đây là bản mô phỏng: số dư, giá AVAX và các giao dịch đều chạy trong trình duyệt, chưa nối chain thật.</p>
+      <p class="note">Đây là bản chơi thử: tiền và giá đều là giả. Bấm <b>Kết nối ví</b> để chơi bằng tiền test trên blockchain.</p>
       <div class="row"><button class="btn primary" data-act="design">Xem bản thiết kế</button></div>`
   },
   lend:{
     stats:()=>kv([['Tiền gốc',usd(st.lend.p)],['Lãi tích lũy',usd(st.lend.acc,3)],['Lãi suất','4,0%/năm'],['Luống rau đang trồng',Math.min(15,Math.ceil(st.lend.p/40))+' / 15']])+
-      `<p class="note">Mỗi 40 USDC là một luống rau. Rau lớn theo lãi và <b>rút lúc nào cũng được</b>. Đây là khu an toàn nhất làng.</p>`,
+      `<p class="note">Giống <b>gửi tiết kiệm</b>: gửi tiền vào, mỗi ngày có lãi (4%/năm), <b>rút lúc nào cũng được</b>. Khu an toàn nhất làng.</p>`,
     actions:()=>`${field('amt-lend')}<div class="row"><button class="btn primary" data-act="lend-dep">Gieo hạt (gửi)</button><button class="btn" data-act="lend-claim">Thu lãi</button><button class="btn" data-act="lend-out">Rút hết</button></div>`
   },
   orchard:{
@@ -441,7 +441,7 @@ const PANELS={
     },
     actions:()=>`<p class="label">Trồng cây mới</p>${field('amt-orchard')}
       <div class="tiers">${Object.entries(TIERS).map(([d,t])=>`<button class="tier" data-act="orch-plant" data-arg="${d}"><b>${t.name}</b><small>Khóa ${d} ngày</small><em>${nf(t.apy*100,0)}%/năm</em></button>`).join('')}</div>
-      <p class="note">Khóa càng lâu lãi càng cao. <b>Nhổ sớm</b> thì lấy lại gốc nhưng mất toàn bộ lãi.</p>`
+      <p class="note">Giống <b>gửi có kỳ hạn</b>: tiền bị khóa đến khi cây chín. Khóa càng lâu, lãi càng cao. <b>Nhổ sớm</b> thì lấy lại tiền nhưng mất lãi.</p>`
   },
   pond:{
     stats:()=>{const il=lpIL();return kv([
@@ -449,14 +449,14 @@ const PANELS={
       ['Impermanent loss',`<span class="${il<-0.005?'down':''}">${nf(il*100,2)}%</span>`],
       ['Giá AVAX lúc thả / hiện tại',st.lp?`$${nf(st.lp.p0)} / $${nf(st.price)}`:'—'],
       ['Thời tiết',`<span class="pill ${st.weather==='bão'?'r':st.weather==='mưa'?'y':'g'}">${wxName(st.weather)}</span>`]])+
-      `<p class="note">Thời tiết lấy từ <b>oracle giá</b>, không random. AVAX biến động trên 4%/ngày là mưa, trên 9% là bão. Giá càng lệch so với lúc thả, cá càng hao (impermanent loss).</p>`},
+      `<p class="note">Bạn góp tiền vào ao để người khác đổi tiền, mỗi lần đổi bạn được chia phí. <b>Rủi ro:</b> giá AVAX lên xuống mạnh thì cá hao, tức tiền góp giảm giá trị. Trời mưa bão nghĩa là giá đang biến động mạnh.</p>`},
     actions:()=>`${field('amt-pond')}<div class="row"><button class="btn primary" data-act="pond-add">Thả cá (thêm LP)</button><button class="btn" data-act="pond-out">Vớt cá hết</button></div>`
   },
   market:{
     stats:()=>{const r=poolRes();const dir=$('#mk-dir')?.value||'u2a';const v=Number(String($('#amt-market')?.value||'0').replace(',','.'))||0;const q=v>0?quote(dir,v):null;
       return kv([['Pool',`${nf(r.u,0)} USDC · ${nf(r.a,0)} AVAX`],['Giá oracle',`$${nf(st.price)}`],['Ví',usd(st.usdc)+' · '+nf(st.avax,3)+' AVAX']])+
       (q?`<div class="item"><div><small>Bạn nhận</small><br><b>${dir==='u2a'?nf(q.out,3)+' AVAX':usd(q.out)}</b></div><div style="text-align:right"><small>Trượt giá</small><br><b class="${q.impact>.01?'down':''}">${nf(q.impact*100,2)}%</b></div></div>`:'')+
-      `<p class="note">Chợ là một pool <b>x·y = k</b>. Bán càng nhiều một lúc thì giá càng tụt, đó là trượt giá. Thử đổi 2.000 USDC để thấy rõ.</p>`},
+      `<p class="note">Đổi USDC lấy AVAX hoặc ngược lại. Đổi càng nhiều một lúc thì giá càng kém (gọi là trượt giá). Thử đổi 2.000 USDC để thấy.</p>`},
     actions:()=>`<label class="field" for="mk-dir"><select id="mk-dir"><option value="u2a">USDC → AVAX</option><option value="a2u">AVAX → USDC</option></select></label>${field('amt-market','',"100")}<div class="row"><button class="btn primary" data-act="market-swap">Đổi</button></div>`
   },
   coop:{
@@ -464,7 +464,7 @@ const PANELS={
       return kv([['AVAX trong kho thóc',nf(st.coll,3)+' AVAX'],['Giá trị thế chấp',usd(collateral())],['Nợ phân bón',usd(st.debt)],['Lãi vay','8%/năm'],['Vay thêm tối đa',usd(maxBorrow())],
         ['Hệ số an toàn',h===Infinity?'<span class="pill g">Không nợ</span>':`<span style="color:${c}">${nf(h,2)}</span>`]])+
         (h===Infinity?'':bar(Math.min(1,(h-0.8)/1.5),c))+
-        `<p class="note">Gửi AVAX vào kho thóc làm thế chấp, vay tối đa 60% giá trị bằng USDC. Giá AVAX giảm thì hệ số an toàn giảm. Dưới <b>1,0</b> là <b>hạn hán</b>: HTX bán AVAX của bạn để trừ nợ, cộng 10% phạt. Thử gửi 20 AVAX, vay gần tối đa rồi bấm <b>Gây bão</b>.</p>`},
+        `<p class="note">Gửi AVAX làm tài sản đảm bảo, vay được tối đa 60% giá trị bằng USDC. <b>Rủi ro:</b> giá AVAX giảm mạnh (hệ số an toàn dưới <b>1,0</b>) thì bị <b>thanh lý</b>: HTX lấy AVAX của bạn để trừ nợ, phạt thêm 10%. Thử: gửi 20 AVAX, vay gần tối đa, rồi bấm <b>Gây bão</b>.</p>`},
     actions:()=>`<p class="label">Kho thóc (thế chấp)</p><label class="field" for="amt-coll"><input id="amt-coll" inputmode="decimal" value="20"><span>AVAX</span></label><div class="row"><button class="btn" data-act="coll-dep">Gửi AVAX</button><button class="btn" data-act="coll-out">Rút AVAX</button></div>
       <p class="label">Phân bón (khoản vay)</p>${field('amt-coop','USDC','250')}<div class="row"><button class="btn primary" data-act="coop-borrow">Vay phân bón</button><button class="btn" data-act="coop-repay">Trả nợ</button></div>`
   },
@@ -475,15 +475,15 @@ const PANELS={
         ['Tự chăm vườn',`<button class="btn ${b.auto?'on':''}" data-act="butler-auto">${b.auto?'Bật':'Tắt'}</button>`]])+
       `<div class="row"><button class="btn" data-act="butler-ask">Hỏi chuyên gia · 0,05 USDC (x402)</button><button class="btn danger" data-act="butler-attack">Thử tấn công</button></div>`+
       `<pre class="term" id="term">${b.log.length?b.log.map(l=>`<span class="${l.cls}">${esc(l.text)}</span>`).join('\n'):'<span class="dim">Nhật ký quản gia trống. Thuê quản gia để bắt đầu.</span>'}</pre>`},
-    actions:()=>`<p class="note">Quản gia không giữ tiền. Nó chỉ có một <b>session key</b> gọi được PolicyModule của smart account. Khi tự chăm vườn, nó tái gieo lãi mỗi ngày, thu cây chín và chuyển cá sang ruộng khi có bão. Mọi lệnh vượt hạn mức hoặc gửi ra ngoài đều bị revert. Khi chưa thuê, thỉnh thoảng sẽ có người hái trộm điểm của bạn.</p>`
+    actions:()=>`<p class="note">Quản gia là trợ lý AI chăm vườn giúp bạn: tự gửi lại tiền lãi, thu cây chín, đưa cá về ruộng khi có bão. Nó <b>chỉ được làm đúng việc bạn cho phép</b>, trong hạn mức mỗi ngày, và không thể gửi tiền ra ngoài. Bạn sa thải nó lúc nào cũng được. Khi chưa thuê, thỉnh thoảng sẽ có người hái trộm điểm của bạn.</p>`
   },
   neighbor:{
     stats:()=>{const n=st.neighbor;return kv([['Điểm chín trên vườn',nf(n.ripe,0)],['Bác Tư',n.cool>0?`<span class="pill y">Đang canh · ${nf(n.cool*24,0)} giờ</span>`:'<span class="pill g">Đang ngủ trưa</span>'],['Điểm mùa của bạn',nf(st.points,0)]])+
       `<div class="row"><button class="btn primary" data-act="steal" ${n.cool>0?'disabled':''}>Hái trộm 40%</button></div>`},
-    actions:()=>`<p class="note">Kiểu "trộm rau" quen thuộc của game nông trại. Chỉ hái được <b>điểm thưởng</b> chưa thu, <b>không bao giờ đụng tiền gốc</b> của ai. Điểm mùa dùng để chia quỹ tài trợ cuối vụ. Nhà nào thuê quản gia thì có người giữ vườn.</p>`
+    actions:()=>`<p class="note">Hàng xóm có thể hái trộm <b>điểm thưởng</b> bạn chưa gom, <b>không bao giờ lấy tiền</b>. Nhớ gom điểm thường xuyên, hoặc thuê quản gia để có người giữ vườn.</p>`
   },
   gate:{
-    stats:()=>`<p class="note">Người chơi chỉ <b>ký</b> một yêu cầu EIP-712. Fee manager ở cổng làng kiểm tra chữ ký, chỉ chuyển tiếp lệnh tới contract của game, rồi gửi giao dịch qua <b>FarmForwarder</b> (ERC-2771) và <b>trả gas hộ</b>. Contract vẫn biết chính xác ai là người chơi.</p>`+
+    stats:()=>`<p class="note">Đây là nơi game <b>trả phí giao dịch giúp bạn</b>. Bạn chỉ cần bấm xác nhận, cổng làng gửi giao dịch lên blockchain thay bạn. Tiền vẫn luôn là của bạn.</p>`+
       (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']]):'')+
       `<div class="list">${st.log.slice(-14).reverse().map(l=>`<div class="item" style="grid-template-columns:1fr"><small>Ngày ${nf(l.day%365,1)} · ${chainChip(l.route)}</small><span style="font-size:13px">${esc(l.text)}</span></div>`).join('')||'<p class="note">Chưa có giao dịch nào.</p>'}</div>`,
     actions:()=>''
@@ -539,7 +539,7 @@ Object.assign(PANELS,{
         privyPicker()+
         (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastPath==='gasless'?' · fee manager trả gas':''}</p>`:'');
     },
-    actions:()=>`<p class="note"><b>Muốn thấy USDC trong MetaMask?</b> Bấm <b>Xuất khóa ví</b> (hoặc <b>Sao lưu khóa ví</b>), trong MetaMask chọn <b>Import account</b> rồi dán khóa, sau đó <b>Import tokens</b> với địa chỉ <code>${CH.cfg.cchain.usdc}</code> (USDC, 6 số lẻ). Hoặc bấm <b>Xem trên Snowtrace</b>, mở tab Tokens.</p><p class="note">Ví trong game giữ khóa ngay trên trình duyệt này, <b>chỉ dùng cho testnet</b>. Đổi máy hay xoá dữ liệu trình duyệt thì ví mất, hãy bấm <b>Sao lưu khóa ví</b> nếu muốn giữ.</p><pre class="term" id="w-key" hidden></pre>`
+    actions:()=>`<p class="note"><b>Muốn xem tiền trong MetaMask?</b> Bấm <b>Xuất khóa ví</b> (hoặc <b>Sao lưu khóa ví</b>) để chép khóa, trong MetaMask chọn <b>Nhập tài khoản</b> rồi dán vào. Sau đó <b>Nhập token</b> với địa chỉ <code>${CH.cfg.cchain.usdc}</code> (USDC, 6 số lẻ). Cách nhanh hơn: bấm <b>Xem trên Snowtrace</b>.</p><p class="note">Ví trong game nằm trên trình duyệt này và chỉ dùng để chơi thử. Đổi máy hoặc xoá dữ liệu trình duyệt là mất ví, nên bấm <b>Sao lưu khóa ví</b>.</p><pre class="term" id="w-key" hidden></pre>`
   }
 });
 /** Several embedded wallets on one Privy account: let the player pick which one the game uses. */
@@ -554,13 +554,13 @@ const LIVE={
     stats:()=>{const d=CH.data;if(!d)return '<p class="note">Đang đọc dữ liệu từ chain…</p>';
       return kv([['Ví',short(CH.account)],['USDC',usd(d.usdc)],['Phí gas',gasTag()],
         ['Ruộng rau',usd(d.lendPrincipal)],['Vườn cây',d.crops.filter(c=>c.status==='Growing').length+' cây đang trồng'],['Điểm mùa',nf(d.farmer.points,0)]])+
-        `<p class="note">${liveTag} ${CH.hasCoop?'Ruộng rau, Vườn cây, Vườn hàng xóm, Ao cá, Chợ phiên và Hợp tác xã':'Ruộng rau, Vườn cây và Vườn hàng xóm'} dùng contract thật trên ${esc(CH.cfg.cchain.name)}. Quản gia AI chạy bằng script (npm run butler:demo). 1 ngày game = ${CH.cfg.dayLength} giây.</p>`},
+        `<p class="note">${liveTag} Bạn đang chơi bằng tiền test trên blockchain Avalanche (mạng thử Fuji), không mất phí giao dịch. 1 ngày trong game = ${CH.cfg.dayLength} giây.</p>`},
     actions:()=>PANELS.home.actions()
   },
   lend:{
     stats:()=>{const d=CH.data;if(!d)return '';
       return kv([['Ví',usd(d.usdc)],['Tiền gốc',usd(d.lendPrincipal)],['Lãi đang chờ',usd(d.lendPending,4)],['Lãi suất','4,0%/năm'],['Quỹ thưởng còn',usd(d.reserve,0)]])+busyLine()+
-        `<p class="note">${liveTag} ${gasTag()} USDC test thật trên Fuji. ${sig()}, fee manager gửi giao dịch hộ.</p>`},
+        `<p class="note">${liveTag} ${gasTag()} Gửi tiền vào là có lãi 4%/năm, rút lúc nào cũng được. Bấm <b>Thu lãi</b> để lấy lãi về ví.</p>`},
     actions:()=>`${field('amt-lend')}<div class="row"><button class="btn primary" data-act="c-lend-dep">Gieo hạt (gửi)</button><button class="btn" data-act="c-lend-claim">Thu lãi</button><button class="btn" data-act="c-lend-out">Rút hết</button></div><div class="row"><button class="btn" data-act="c-faucet">Nhận 1.000 USDC test</button></div>`
   },
   orchard:{
@@ -578,14 +578,14 @@ const LIVE={
       return busyLine()+`<div class="list">${items||'<p class="note">Chưa có cây nào. Chọn loại cây bên dưới để trồng.</p>'}</div>`},
     actions:()=>`<p class="label">Trồng cây mới</p>${field('amt-orchard','USDC','10')}
       <div class="tiers">${Object.entries(TIERS).map(([d,t])=>`<button class="tier" data-act="c-plant" data-arg="${d}"><b>${t.name}</b><small>${d} ngày game · ${nf(d*CH.cfg.dayLength/60,0)} phút</small><em>${nf(t.apy*100,0)}%/năm</em></button>`).join('')}</div>
-      <p class="note">${liveTag} ${gasTag()} Trồng cây là khóa USDC vào FarmGame trên Fuji, chín thì nhận gốc + lãi. Lần đầu game sẽ xin chữ ký cho phép dùng USDC, cũng miễn phí gas.</p>`
+      <p class="note">${liveTag} ${gasTag()} Trồng cây là khóa tiền đến khi cây chín. Chín thì thu về cả tiền gốc lẫn lãi. Lần đầu game xin phép dùng USDC của bạn, cũng miễn phí.</p>`
   },
   neighbor:{
     stats:()=>{const d=CH.data;if(!d)return '';const f=d.farmer;
       return kv([['Điểm mùa của bạn',nf(f.points,0)],['Điểm chín chưa gom',nf(f.ripePoints,0)],['Chuỗi ngày tưới',f.streak+' ngày'],['Người giữ vườn',f.guarded?'<span class="pill g">Có</span>':'<span class="pill r">Không</span>']])+busyLine()+
         `<div class="row"><button class="btn primary" data-act="c-collect">Gom điểm</button><button class="btn" data-act="c-guard" data-arg="${f.guarded?0:1}">${f.guarded?'Bỏ người giữ vườn':'Thuê người giữ vườn'}</button></div>`},
     actions:()=>`<p class="label">Hái trộm vườn bạn bè</p><label class="field" for="steal-addr"><input id="steal-addr" placeholder="0x… địa chỉ ví bạn bè" autocomplete="off" spellcheck="false"></label><div class="row"><button class="btn" data-act="c-steal">Hái trộm 40%</button></div>
-      <p class="note">${liveTag} Tưới cây mỗi ngày để có điểm chín. Điểm chín chưa gom có thể bị hàng xóm hái 40%, mỗi người 1 lần/ngày. Phải có ít nhất một cây đang trồng mới được hái trộm. Chỉ đụng điểm thưởng, không bao giờ đụng tiền.</p>`
+      <p class="note">${liveTag} Tưới cây mỗi ngày để được điểm. Điểm chưa gom có thể bị hàng xóm hái mất 40%, nên nhớ bấm <b>Gom điểm</b>. Chỉ mất điểm, không bao giờ mất tiền. Muốn hái trộm thì bạn phải đang trồng ít nhất một cây.</p>`
   }
 };
 if(CH.hasPond)Object.assign(LIVE,{
@@ -593,13 +593,13 @@ if(CH.hasPond)Object.assign(LIVE,{
     stats:()=>{const d=CH.data,p=d&&d.pond;if(!p)return '';
       return kv([['Phần của bạn',usd(p.value)],['Gồm',`${usd(p.usdcPart)} + ${nf(p.avaxPart,3)} gAVAX`],['Giá gAVAX trong ao',`$${nf(p.price)}`],
         ['Giá Chainlink',d.coop&&d.coop.priceOk?`$${nf(d.coop.price)}`:'—'],['Cả ao',`${nf(p.reserveUsdc,0)} USDC · ${nf(p.reserveAvax,0)} gAVAX`],['Phí cho người thả cá','0,3% mỗi lần đổi']])+busyLine()+
-        `<p class="note">${liveTag} ${gasTag()} Ao cá là pool <b>x·y = k</b> USDC/gAVAX thật (FarmPond). Thả cá bằng USDC: contract tự đổi một nửa sang gAVAX. Giá trong ao lệch khỏi giá lúc thả thì cá hao (impermanent loss), bù lại bạn ăn phí của mọi lần đổi.</p>`},
+        `<p class="note">${liveTag} ${gasTag()} Thả USDC vào ao, game tự đổi một nửa sang AVAX. Mỗi lần có người đổi tiền trong ao, bạn được chia phí. <b>Rủi ro:</b> giá AVAX thay đổi nhiều thì phần của bạn có thể giảm giá trị.</p>`},
     actions:()=>`${field('amt-pond','USDC','50')}<div class="row"><button class="btn primary" data-act="c-pond-add">Thả cá (thêm LP)</button><button class="btn" data-act="c-pond-half">Vớt một nửa</button><button class="btn" data-act="c-pond-out">Vớt cá hết</button></div>`
   },
   market:{
     stats:()=>{const d=CH.data,p=d&&d.pond;if(!p)return '';
       return kv([['Ví',`${usd(d.usdc)} · ${nf(d.gavax,3)} gAVAX`],['Giá gAVAX trong ao',`$${nf(p.price)}`],['Giá Chainlink',d.coop&&d.coop.priceOk?`$${nf(d.coop.price)}`:'—']])+busyLine()+
-        `<p class="note">${liveTag} Chợ phiên đổi trực tiếp trong Ao cá (FarmPond). Giá trượt tối đa 1%, vượt thì giao dịch tự huỷ. Giá ao lệch Chainlink là cơ hội arbitrage.</p>`},
+        `<p class="note">${liveTag} Đổi USDC và AVAX ngay trong Ao cá. Nếu giá kém hơn 1% so với lúc bấm, giao dịch tự huỷ để bảo vệ bạn.</p>`},
     actions:()=>`<label class="field" for="mk-dir"><select id="mk-dir"><option value="u2a">USDC → gAVAX</option><option value="a2u">gAVAX → USDC</option></select></label>${field('amt-market','',"10")}<div class="row"><button class="btn primary" data-act="c-swap">Đổi</button><button class="btn" data-act="c-avax-faucet">Nhận 20 gAVAX test</button></div>`
   }
 });
@@ -610,7 +610,7 @@ if(CH.hasCoop)LIVE.coop={
     return kv([['gAVAX trong kho thóc',nf(c.collateral,3)+' gAVAX'],['Giá trị thế chấp',usd(c.value)],['Giá AVAX (Chainlink)',`$${nf(c.price)}`],['Nợ phân bón',usd(c.debt,4)],['Lãi vay','8%/năm'],['Vay thêm tối đa',usd(c.maxBorrow)],
       ['Hệ số an toàn',h===Infinity?'<span class="pill g">Không nợ</span>':`<span style="color:${col}">${nf(h,2)}</span>`],['Ví',`${usd(d.usdc)} · ${nf(d.gavax,3)} gAVAX`]])+
       (h===Infinity?'':bar(Math.min(1,(h-0.8)/1.5),col))+busyLine()+
-      `<p class="note">${liveTag} ${gasTag()} FarmCoop định giá gAVAX bằng <b>Chainlink AVAX/USD</b> trên Fuji. Vay tối đa 60% giá trị. Hệ số dưới <b>1,0</b> (nợ vượt 75% giá trị) thì ai cũng có thể trả nợ thay và lấy gAVAX của bạn kèm 10% phạt.</p>`},
+      `<p class="note">${liveTag} ${gasTag()} Gửi AVAX làm tài sản đảm bảo, vay tối đa 60% giá trị. Giá AVAX lấy từ Chainlink, là giá thật. <b>Rủi ro:</b> hệ số an toàn dưới <b>1,0</b> là bị thanh lý: người khác trả nợ thay và lấy AVAX của bạn, kèm 10% phạt.</p>`},
   actions:()=>`<p class="label">Kho thóc (thế chấp)</p><label class="field" for="amt-coll"><input id="amt-coll" inputmode="decimal" value="10"><span>gAVAX</span></label><div class="row"><button class="btn" data-act="c-coll-dep">Gửi gAVAX</button><button class="btn" data-act="c-coll-out">Rút gAVAX</button><button class="btn" data-act="c-avax-faucet">Nhận 20 gAVAX test</button></div>
     <p class="label">Phân bón (khoản vay)</p>${field('amt-coop','USDC','30')}<div class="row"><button class="btn primary" data-act="c-coop-borrow">Vay phân bón</button><button class="btn" data-act="c-coop-repay">Trả nợ</button></div>`
 };

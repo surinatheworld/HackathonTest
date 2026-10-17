@@ -18,15 +18,15 @@ const store = {
 /* ---------------------------------------------------------------- steps
    target: zone id → arrow on the map; el: CSS selector → glowing outline; done(ev): completes the step. */
 const STEPS = [
-  { title: 'Chào mừng tới làng!', text: 'Mỗi khu trong làng là một cơ chế <b>DeFi thật</b> trên Avalanche: gửi tiết kiệm, staking, thanh khoản, vay thế chấp. Hướng dẫn này mất khoảng 1 phút.', next: 'Bắt đầu' },
-  { title: 'Di chuyển', text: 'Đi bằng <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> hoặc phím mũi tên. Trên điện thoại, <b>chạm vào bản đồ</b> để nhân vật tự đi tới. Thử đi vài bước nhé.', done: (e) => e.type === 'moved' },
-  { title: 'Bản đồ nhỏ', text: 'Góc màn hình là <b>bản đồ nhỏ</b>: bấm vào một khu trên đó, nhân vật sẽ tự đi tới. Bấm nút mở rộng để xem bản đồ lớn có chú thích.', el: '.mm', next: 'Đã hiểu' },
-  { title: 'Ruộng rau = gửi tiết kiệm', text: 'Đi theo <b>mũi tên vàng</b> tới <b>Ruộng rau</b>, đứng cạnh biển gỗ rồi bấm <kbd>E</kbd> (hoặc nút vàng ở dưới).', target: 'lend', done: (e) => e.type === 'open' && e.id === 'lend' },
-  { title: 'Gieo hạt', text: 'Ruộng rau là <b>cho vay stablecoin</b>: gửi USDC vào, lãi <b>4%/năm</b> chảy về mỗi ngày, rút lúc nào cũng được. Bấm <b>Gieo hạt (gửi)</b> để thử.', el: '[data-act="lend-dep"],[data-act="c-lend-dep"]', done: (e) => e.type === 'act' && /lend-dep$/.test(e.act) },
-  { title: 'Vườn cây = staking có kỳ hạn', text: 'Giờ tới <b>Vườn cây</b>. Ở đây tiền bị <b>khóa</b> 7, 30 hoặc 90 ngày: khóa càng lâu lãi càng cao (6%, 9%, 14%). Nhổ sớm thì lấy lại gốc nhưng mất lãi.', target: 'orchard', done: (e) => e.type === 'open' && e.id === 'orchard' },
-  { title: 'Rủi ro: Ao cá và Hợp tác xã', text: '<b>Ao cá</b> là góp thanh khoản: ăn phí nhưng cá có thể hao (impermanent loss). <b>Hợp tác xã</b> cho vay thế chấp AVAX: giá tụt thì bị <b>thanh lý</b>. Bấm <b>Gây bão</b> để ép giá AVAX giảm và xem rủi ro diễn ra (chỉ mô phỏng).', el: '#b-storm', next: 'Tiếp' },
-  { title: 'Chơi thật trên blockchain', text: 'Bấm <b>Kết nối ví</b> → <b>Email / Google</b> hoặc <b>Ví trong game</b>. Không cần cài ví, không cần AVAX: <b>fee manager</b> trả phí gas giúp bạn. Vào Ruộng rau bấm <b>Nhận 1.000 USDC test</b> để có tiền chơi.', el: '#b-wallet', next: 'Tiếp' },
-  { title: 'Sẵn sàng rồi!', text: 'Mọi giao dịch đều xem được trên <b>Snowtrace</b>. Muốn xem lại hướng dẫn, bấm <b>Hướng dẫn</b> trên thanh trên cùng. Chúc bạn được mùa!', next: 'Chơi thôi' },
+  { title: 'Chào mừng tới làng!', text: 'Mỗi khu trong làng là một cách cho tiền sinh lời, giống ngoài đời nhưng dùng <b>tiền thử</b>. Hướng dẫn chỉ mất khoảng 1 phút.', next: 'Bắt đầu' },
+  { title: 'Di chuyển', text: 'Đi bằng <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> hoặc phím mũi tên. Trên điện thoại thì <b>chạm vào bản đồ</b>. Thử đi vài bước nhé.', done: (e) => e.type === 'moved' },
+  { title: 'Bản đồ nhỏ', text: 'Góc màn hình là <b>bản đồ nhỏ</b>. Bấm vào một khu trên đó, nhân vật tự đi tới.', el: '.mm', next: 'Đã hiểu' },
+  { title: 'Ruộng rau = gửi tiết kiệm', text: 'Đi theo <b>mũi tên vàng</b> tới <b>Ruộng rau</b>, đứng cạnh biển gỗ rồi bấm <kbd>E</kbd>.', target: 'lend', done: (e) => e.type === 'open' && e.id === 'lend' },
+  { title: 'Gieo hạt', text: 'Ruộng rau giống <b>gửi tiết kiệm</b>: gửi USDC vào, mỗi ngày có lãi (4%/năm), rút lúc nào cũng được. Bấm <b>Gieo hạt (gửi)</b> để thử.', el: '[data-act="lend-dep"],[data-act="c-lend-dep"]', done: (e) => e.type === 'act' && /lend-dep$/.test(e.act) },
+  { title: 'Vườn cây = gửi có kỳ hạn', text: 'Giờ tới <b>Vườn cây</b>. Tiền bị <b>khóa</b> 7, 30 hoặc 90 ngày. Khóa càng lâu, lãi càng cao. Nhổ sớm thì lấy lại tiền nhưng mất lãi.', target: 'orchard', done: (e) => e.type === 'open' && e.id === 'orchard' },
+  { title: 'Rủi ro: Ao cá và Hợp tác xã', text: '<b>Ao cá</b>: góp tiền để người khác đổi tiền, bạn được chia phí, nhưng giá biến động thì tiền góp có thể hao. <b>Hợp tác xã</b>: vay tiền bằng cách gửi AVAX làm đảm bảo, giá AVAX giảm mạnh thì bị lấy mất AVAX. Bấm <b>Gây bão</b> để xem (chỉ là mô phỏng).', el: '#b-storm', next: 'Tiếp' },
+  { title: 'Chơi thật trên blockchain', text: 'Bấm <b>Kết nối ví</b> rồi chọn <b>Email / Google</b>. Không cần cài gì, không mất phí: game trả phí giao dịch giúp bạn. Vào Ruộng rau, bấm <b>Nhận 1.000 USDC test</b> để có tiền chơi.', el: '#b-wallet', next: 'Tiếp' },
+  { title: 'Sẵn sàng rồi!', text: 'Muốn xem lại, bấm <b>Hướng dẫn</b> trên thanh trên cùng. Chúc bạn được mùa!', next: 'Chơi thôi' },
 ];
 
 /* ---------------------------------------------------------------- styles */
