@@ -1,6 +1,7 @@
 // npm run butler:demo
 // Runs as the AI agent only (AGENT_PRIVATE_KEY). The owner grants the session key once in deploy.html,
 // step 5. The agent deposits inside its policy, then a prompt-injected transfer is reverted on-chain.
+// BUTLER_ONCHAIN_ATTACK=1 also sends that transfer as a real transaction, so the revert is visible on Snowtrace.
 require("dotenv").config();
 const { ethers } = require("ethers");
 const { load, loadWebConfig } = require("./common");
@@ -62,6 +63,13 @@ async function main() {
       const err = butler.interface.parseError(e.data || e.info?.error?.data || "0x");
       console.log(`  ${label}: REVERT ${err ? err.name : e.shortMessage}`);
     }
+  }
+  // Leave on-chain proof: send the injected transfer for real (fixed gas so it is mined), and let the
+  // contract revert it. Snowtrace then shows a failed transaction from the agent with the policy error.
+  if (process.env.BUTLER_ONCHAIN_ATTACK) {
+    const tx = await butler.execute(usdc.target, tries[0][2], { gasLimit: 200_000 });
+    const rc = await provider.waitForTransaction(tx.hash);
+    console.log(`  Gửi thật lên chain: transfer(attacker) → ${rc.status === 0 ? "REVERT (bị contract chặn)" : "KHÔNG bị chặn!"} · tx ${tx.hash}`);
   }
   console.log(`ButlerAccount vẫn giữ ${fmt(await usdc.balanceOf(butler.target))} USDC.`);
 }

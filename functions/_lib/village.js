@@ -49,10 +49,11 @@ async function build(env, config) {
   // Not players: the farm contracts and the team's own wallets (fee manager pool, which is also the deployer).
   const contracts = new Set([c.game, c.coop, c.pond, c.quests, c.items, c.forwarder, c.usdc, c.gavax].filter(Boolean));
   if (env.RELAYER_PRIVATE_KEY) for (const k of relayerKeys(env)) contracts.add(lc(new ethers.Wallet(k).address));
-  const [txs, transfers, rewards] = await Promise.all([
+  const [txs, transfers, rewards, butlerTxs] = await Promise.all([
     list(env, chainId, `addresses/${config.forwarder}/transactions`, "transactions"),
     list(env, chainId, `tokens/${config.usdc}/transfers`, "transfers", 3),
     config.quests ? list(env, chainId, `addresses/${config.quests}/transactions:listErc20`, "transactions") : { items: [], complete: true },
+    config.butler ? list(env, chainId, `addresses/${config.butler}/transactions`, "transactions", 1) : { items: [] },
   ]);
 
   // Fee manager: every FarmForwarder.execute is one transaction the fee manager paid for.
@@ -105,6 +106,12 @@ async function build(env, config) {
     activity,
     leaderboard,
     farmers: [...farmers.entries()].slice(0, 12).map(([who, at]) => ({ who, at })),
+    // The AI butler's own account: what its agent key did, and what the contract refused.
+    butler: butlerTxs.items
+      .map(({ nativeTransaction: t }) => t)
+      .filter((t) => /^execute/.test(t.method?.methodName || ""))
+      .slice(0, 8)
+      .map((t) => ({ by: lc(t.from.address), ok: t.txStatus === "1", at: t.blockTimestamp, tx: t.txHash })),
   };
 }
 

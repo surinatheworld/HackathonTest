@@ -83,6 +83,13 @@
       "error RewardPoolEmpty(uint256 available, uint256 needed)",
     ],
     forwarder: ["function nonces(address) view returns (uint256)"],
+    butler: [
+      "function owner() view returns (address)",
+      "function agent() view returns (address)",
+      "function agentActive() view returns (bool)",
+      "function dailyCap() view returns (uint256)",
+      "function remainingToday() view returns (uint256)",
+    ],
   };
   const STATUS = ["None", "Growing", "Harvested", "Uprooted"];
   const TYPES = {
@@ -588,6 +595,15 @@
     return run(usdcIn ? "Mua gAVAX ở chợ" : "Bán gAVAX ở chợ", c.pond, pondI, "swap", [usdcIn, amount, minus(out)], GAS.pond);
   };
 
+  /** The demo ButlerAccount on Fuji: its agent session key, kill switch and daily cap, read live. */
+  CH.readButler = async () => {
+    if (!c.butler) return null;
+    const b = new E.Contract(c.butler, ABI.butler, rp);
+    const [owner, agent, active, cap, left, held, lend] = await Promise.all([
+      b.owner(), b.agent(), b.agentActive(), b.dailyCap(), b.remainingToday(), usdcR.balanceOf(c.butler), gameR.lends(c.butler),
+    ]);
+    return { address: c.butler, owner, agent, active, cap: toNum(cap), left: toNum(left), held: toNum(held), lent: toNum(lend.principal ?? lend[0]) };
+  };
   CH.explorerTx = (hash) => (c.explorer ? `${c.explorer.replace(/\/$/, "")}/tx/${hash}` : "");
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
