@@ -187,6 +187,19 @@ export async function relay(body, env, config) {
   } catch (e) {
     return json(422, { error: "Giao dịch sẽ thất bại: " + explain(e) });
   }
-  const tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n });
+  // One relayer wallet serves every player, so two requests at the same moment can pick the same nonce. On a
+  // nonce clash, wait a little and retry with the next pending nonce instead of failing the player.
+  let tx;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const nonce = await provider.getTransactionCount(wallet.address, "pending");
+      tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n, nonce: nonce + (attempt > 2 ? attempt - 2 : 0) });
+      break;
+    } catch (e) {
+      const m = String(e?.shortMessage || e?.message || e);
+      if (attempt >= 5 || !/nonce|replacement|already known|underpriced/i.test(m)) throw e;
+      await new Promise((r) => setTimeout(r, 250 + Math.random() * 600));
+    }
+  }
   return json(200, { hash: tx.hash, relayer: wallet.address });
 }

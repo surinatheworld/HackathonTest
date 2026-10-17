@@ -28,6 +28,12 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - Mọi hàm dùng `_msgSender()`, nên chạy được cả khi gửi trực tiếp lẫn khi gửi qua fee manager.
 - **FarmCoop** (Hợp tác xã): gửi gAVAX làm thế chấp, vay USDC tối đa 60% giá trị theo giá **Chainlink AVAX/USD** trên Fuji, lãi vay 8%/năm. Khi nợ vượt 75% giá trị, bất kỳ ai cũng có thể trả nợ thay và nhận gAVAX kèm 10% phạt. Giá cũ hơn 2 ngày thì không cho vay.
 - **FarmPond** (Ao cá và Chợ phiên): pool x·y = k USDC/gAVAX, phí 0,3% chia cho người thả cá. `zapIn`/`zapOut` cho người chỉ có USDC. Impermanent loss trong game là thật.
+- **FarmItems** (Kho đồ, ERC-1155):
+  - **Nông sản**: thu hoạch cây là nhận ớt, xoài, sầu riêng. Để quá 7 ngày game thì hỏng, nên không ai tích trữ để đầu cơ.
+  - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
+  - **Đồ trang trí**: mua bằng điểm mùa, hoặc ghép từ nông sản thành Mâm ngũ quả. Nón lá đội lên được cho nhân vật, đồ trang trí bày ở Nhà mình.
+  - **Chợ đổi đồ**: chỉ đổi đồ lấy đồ, contract giữ đồ hộ trong lúc chờ. Phí là 1 điểm mùa cho mỗi món đưa ra. Vật phẩm chỉ đổi chủ qua chợ, nên không lách được phí, và **không có cách nào đổi vật phẩm ra USDC**.
+- **Tặng tiền test**: người chơi tặng USDC hoặc gAVAX test cho bạn bè ngay trong game, không mất phí.
 - **FarmForwarder**: `ERC2771Forwarder` của OpenZeppelin. Kiểm tra chữ ký, nonce (chống phát lại) và hạn của request.
 - **Fee manager** (`functions/api/relay.js`): Cloudflare Pages Function.
   - Chỉ trả gas cho các hàm người chơi trên contract của game. `approve` chỉ được tới contract của game.
@@ -51,6 +57,7 @@ Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md))
 | GaslessUSDC | [`0x794659AB388EEec7f80038191bA763f900CE1978`](https://testnet.snowtrace.io/address/0x794659AB388EEec7f80038191bA763f900CE1978#code) |
 | GaslessAVAX (gAVAX) | [`0xa1e8250Bcbab7436252e3c25764f8898913E7c1C`](https://testnet.snowtrace.io/address/0xa1e8250Bcbab7436252e3c25764f8898913E7c1C#code) |
 | FarmForwarder | [`0x7dD93fef1ce942f11fc72E5BD7F53f749A028636`](https://testnet.snowtrace.io/address/0x7dD93fef1ce942f11fc72E5BD7F53f749A028636#code) |
+| FarmItems | [`0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174`](https://testnet.snowtrace.io/address/0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174#code) |
 | ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
 | MockYieldSource | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
 | DemoPriceFeed | [`0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B`](https://testnet.snowtrace.io/address/0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B#code) |
@@ -100,7 +107,7 @@ docs/SECURITY.md                Kết quả Slither và các tình huống đã 
 ```bash
 cd contracts
 npm install
-npm test            # 39 test
+npm test            # 52 test
 npm run test:fork   # 6 test trên chính các contract đang chạy ở Fuji
 npm run local       # http://localhost:8790, chuỗi local + fee manager local
 ```
@@ -120,7 +127,10 @@ Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** 
 | Hợp tác xã | Thế chấp gAVAX, vay USDC theo giá Chainlink, thanh lý | On-chain (FarmCoop) |
 | Chợ phiên | Swap trong Ao cá, trượt giá tối đa 1% | On-chain (FarmPond) |
 
-Không có token game, không có random drop: mọi thứ tất định.
+| Kho đồ | Nông sản, huy hiệu học DeFi, đồ trang trí | On-chain (FarmItems) |
+| Chợ đổi đồ | Đổi đồ lấy đồ, phí bằng điểm | On-chain (FarmItems) |
+
+Không có token game, không có random drop, không lootbox: mọi thứ tất định. Vật phẩm không đổi ra tiền.
 
 ## Ba câu pitch phải trả lời
 
@@ -139,6 +149,7 @@ Không có token game, không có random drop: mọi thứ tất định.
 - **Chỉ chạy trên testnet.** Avalanche Fuji là mạng thử nghiệm. USDC trong game là token test do chính dự án mint, không có giá trị và không quy đổi ra tiền thật.
 - **Không phát hành token, không gọi vốn.** Không có token game, không ICO/IDO, không bán vật phẩm. Quỹ thưởng là USDC test do nhà tài trợ hoặc nhóm nạp vào.
 - **Không dùng tài sản mã hóa làm phương tiện thanh toán.** Theo pháp luật hiện hành, chỉ VND là phương tiện thanh toán hợp pháp. Game không bán hàng hóa hay dịch vụ lấy crypto.
+- **Vật phẩm không quy đổi ra tiền.** Kho đồ chỉ cho đổi đồ lấy đồ trong game, phí trả bằng điểm mùa. Không có hàm nào đổi vật phẩm ra USDC. Vật phẩm không chuyển ra ngoài được, huy hiệu gắn chặt với ví. Đồ hiếm có được nhờ hoàn thành bài học hoặc đứng top mùa, không phải nhờ may rủi.
 - **Không có yếu tố may rủi.** Không random drop, không lootbox, không quay thưởng. Lợi nhuận tính theo công thức công khai. "Điểm mùa" chỉ là điểm thưởng, không đổi ra tiền hay tài sản, nên không có tính chất cờ bạc hay trò chơi có thưởng.
 - **Không phải sản phẩm đầu tư hay tư vấn tài chính.** Lãi suất là mô phỏng để học cách DeFi vận hành. Quản gia AI chỉ thực hiện rule do người dùng đặt, không đưa khuyến nghị đầu tư.
 - **Dữ liệu cá nhân.** Game không thu thập họ tên, email hay số điện thoại. Chỉ có địa chỉ ví công khai trên chain.

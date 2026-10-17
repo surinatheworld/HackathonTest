@@ -643,7 +643,7 @@ const ICON={chili:'🌶️',mango:'🥭',durian:'🍈',seed:'🌱',hourglass:'�
 const rcls=r=>r==='hiếm'?'r-hiem':r==='huyền thoại'?'r-huyen':r==='huy hiệu'?'r-huyhieu':'';
 const iconOf=it=>it.icon==='hat'?`<span class="hat-dot" style="background:${it.color}"></span>`:(ICON[it.icon]||'📦');
 const owned=id=>(CH.data?.items?.list||[]).find(x=>x.id===String(id));
-function playerHat(){const h=CH.live&&CH.data?.items?.hat;return h&&CH.CATALOG?.[h]?CH.CATALOG[h].color:null}
+function playerHat(){const h=CH.live&&CH.data?.items?.hat;return h&&CH.CATALOG?.[h]&&owned(h)?CH.CATALOG[h].color:null} // a traded-away hat is no longer shown
 PANELS.inventory={
   title:'Kho đồ',tag:'Nông sản · huy hiệu · đồ trang trí',chains:[['C-Chain','c'],['Fee manager','x']],
   stats:()=>`<p class="note">Kho đồ lưu thật trên blockchain. Bấm <b>Kết nối ví</b> để mở kho đồ của bạn.</p>

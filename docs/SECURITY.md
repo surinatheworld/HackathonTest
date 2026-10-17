@@ -29,7 +29,23 @@ slither . --filter-paths "node_modules|contracts/l1|contracts/test|ICMApp|FarmVa
 | Low: `events-maths` | 3 | 0 | Thêm event cho `DemoPriceFeed` và `MockYieldSource`. |
 | Low: `timestamp` | 24 | 24 | Game tính theo ngày (`block.timestamp / dayLength`). Validator chỉ lệch được vài giây, không ảnh hưởng. |
 
-## Các tình huống có test (39 test thường, 6 test fork)
+### FarmItems (Kho đồ), thêm ngày 17/10/2026
+
+Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có `nonReentrant`). Có 8 mục Medium, tất cả là báo nhầm:
+- `uninitialized-local`: biến đếm bắt đầu từ 0 theo mặc định.
+- `unused-return`: cố ý chỉ lấy vài trường khi đọc `crops`, `farmers`, `lends` của FarmGame.
+
+13 test riêng (`test/items.test.js`) kiểm tra:
+- Nông sản chỉ nhận được một lần cho mỗi cây, và hỏng sau 7 ngày.
+- Không tặng được vật phẩm, không `approve` được.
+- Huy hiệu được kiểm tra trên chain và không đổi được.
+- Điểm mùa không âm.
+- Phí đổi đồ không lách được bằng cách chia nhỏ.
+- Đồ được giữ hộ (escrow) và trả lại khi huỷ hoặc hết hạn.
+- Cúp mùa vụ tối đa 10 mỗi mùa.
+- Chạy được gasless.
+
+## Các tình huống có test (52 test thường, 6 test fork)
 
 - **Quỹ thưởng không bị rút cạn**: lãi chỉ trả tới mức quỹ còn, gốc luôn được trả đủ (`coop-pond.test.js`).
 - **Fee manager không bị lạm dụng**:

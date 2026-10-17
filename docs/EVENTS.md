@@ -70,6 +70,26 @@
 | `RuleSet` | `target` (indexed), `selector` (indexed), `allowed`, `amountArg`, `firstArg` | Thêm/sửa rule |
 | `Executed` | `by` (indexed), `target` (indexed), `selector` (indexed), `counted` | Agent hoặc owner chạy một lệnh. `counted` là số USDC tính vào hạn mức |
 
+## FarmItems (`cchain.items`): Kho đồ
+
+ERC-1155. Id: nông sản = `loại × 1e9 + ngày thu hoạch` (loại 1 ớt, 2 xoài, 3 sầu riêng; hỏng sau 7 ngày game), huy hiệu 1001–1007, đồ trang trí 2001–2006. Ngoài các event dưới đây còn có `TransferSingle`/`TransferBatch` chuẩn ERC-1155.
+
+| Event | Tham số | Ý nghĩa |
+|---|---|---|
+| `HarvestClaimed` | `user`, `cropId`, `itemId` (indexed), `amount` | Nhận nông sản của cây đã thu hoạch |
+| `BadgeEarned` | `user`, `badgeId` (indexed) | Nhận huy hiệu (không chuyển được) |
+| `WatchStarted` | `user`, `badgeId` (indexed), `day` | Bắt đầu tính ngày cho huy hiệu Người nuôi cá / Vay an toàn |
+| `TrophyAwarded` | `season`, `user` (indexed) | Owner trao Cúp mùa vụ (tối đa 10 mỗi mùa) |
+| `Bought` | `user`, `id` (indexed), `amount`, `points` | Mua đồ trang trí bằng điểm mùa |
+| `Crafted` | `user`, `id` (indexed) | Ghép Mâm ngũ quả |
+| `HatEquipped` | `user`, `id` (indexed) | Đội nón (0 = nón thường) |
+| `Discarded` | `user`, `id` (indexed), `amount` | Bỏ nông sản |
+| `OfferMade` | `offerId`, `maker`, `taker` (indexed), `expires`, `fee` | Đăng đề nghị đổi đồ. `taker` = 0 là công khai. Đọc chi tiết bằng `offer(offerId)` |
+| `OfferTaken` | `offerId`, `taker` (indexed), `fee` | Đổi xong |
+| `OfferCancelled` | `offerId` (indexed) | Huỷ hoặc hết hạn, đồ về lại người đăng |
+
+**Bảng đổi đồ**: `offerCount()` rồi `offer(i)` cho các id mới nhất; đề nghị còn mở khi `open && expires >= now`. Điểm mùa còn dùng được: `pointsOf(address)` (điểm FarmGame trừ phần đã tiêu ở đây).
+
 ## Token
 
 `GaslessUSDC` (`cchain.usdc`) và `GaslessAVAX` (`cchain.gavax`) là ERC-20 chuẩn: `Transfer(from, to, value)`, `Approval(owner, spender, value)`. Lần nhận faucet là `Transfer` từ `0x0000…0000`.
