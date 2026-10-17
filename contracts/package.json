@@ -23,7 +23,8 @@
     "handover:l1": "hardhat run scripts/handover.js --network farml1",
     "deploy:gasless": "hardhat run scripts/deploy-gasless.js --network fuji",
     "smoke:gasless": "node scripts/gasless-smoke.js",
-    "drought": "node scripts/drought.js"
+    "drought": "node scripts/drought.js",
+    "rehearse:drought": "node -e \"process.env.FORK_FUJI=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'run','scripts/rehearse-drought.js'],{stdio:'inherit',env:process.env})\""
   },
   "license": "MIT",
   "type": "commonjs",

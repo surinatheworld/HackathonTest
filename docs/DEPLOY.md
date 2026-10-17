@@ -60,6 +60,8 @@ Hợp tác xã đọc giá thật từ Chainlink, nên bình thường không th
    - `oracle_` = `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` (Chainlink AVAX/USD)
    - `maxPriceAge_` = `172800`
 
+Diễn tập trước toàn bộ kịch bản trên bản fork của Fuji (không cần khóa, không đụng chain thật): `npm run rehearse:drought`.
+
 ## 2c. Rà bảo mật bằng Slither
 
 Đã chạy Slither 0.11.6 ngày 17/10/2026. Kết quả, các lỗi đã sửa và lệnh để chạy lại có trong [SECURITY.md](SECURITY.md).
