@@ -82,7 +82,7 @@ const ITEMS_ABI = [
   "error WrongItem(uint256 want, uint256 got)",
   "error NotAHat()",
 ];
-const QUESTS_ABI = ["function complete()", "error NotDoneYet(uint256 quest)", "error AllDone()", "error RewardPoolEmpty(uint256 available, uint256 needed)"];
+const QUESTS_ABI = ["function complete(uint256 hint)", "error NotDoneYet(uint256 quest)", "error AllDone()", "error RewardPoolEmpty(uint256 available, uint256 needed)"];
 const POND_ABI = [
   "function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)",
   "function zapIn(uint256 usdcAmount, uint256 minShares)",
@@ -153,20 +153,24 @@ const LIMITS = {
   ip: [{ n: 300, s: 60 }, { n: 10_000, s: 86_400 }],
   wallet: [{ n: 40, s: 60 }, { n: 500, s: 86_400 }],
 };
-const counters = new Map();
+const counters = new Map(); // key -> { n, exp }
 
 async function bump(id, windowS) {
-  const slot = Math.floor(Date.now() / 1000 / windowS);
+  const now = Math.floor(Date.now() / 1000);
+  const slot = Math.floor(now / windowS);
   const key = `${id}:${windowS}:${slot}`;
-  let n = (counters.get(key) || 0) + 1;
-  counters.set(key, n);
-  if (counters.size > 5000) for (const k of counters.keys()) if (!k.endsWith(`:${windowS}:${slot}`)) counters.delete(k);
+  const exp = (slot + 1) * windowS;
+  let n = (counters.get(key)?.n || 0) + 1;
+  counters.set(key, { n, exp });
+  // Drop only counters whose window is over, never the live ones of the other window.
+  if (counters.size > 5000) for (const [k, v] of counters) if (v.exp <= now) counters.delete(k);
   try {
     const cache = globalThis.caches?.default;
     if (cache) {
       const url = "https://rate-limit.nongtrai.internal/" + encodeURIComponent(key);
       const hit = await cache.match(url);
       n = Math.max(n, (hit ? Number(await hit.text()) || 0 : 0) + 1);
+      counters.set(key, { n, exp });
       await cache.put(url, new Response(String(n), { headers: { "cache-control": `max-age=${windowS}` } }));
     }
   } catch {}
@@ -188,47 +192,58 @@ async function limited(kind, id) {
   return null;
 }
 
+/** An error whose message is safe to show players (no key, no RPC URL). Anything else gets a fixed text. */
+export class PublicError extends Error {}
+export const publicMessage = (e) => (e instanceof PublicError ? e.message : "Fee manager gặp lỗi, thử lại sau.");
+
 // Relayer pool: the configured key plus child keys derived from it, so no extra secret is needed. Each player
 // sticks to one wallet (picked from their address), so players spread over the pool and stop racing for the
-// same nonce. A child wallet with too little AVAX is skipped; fund them with `npm run fund:relayers`.
+// same nonce. A wallet with too little AVAX is skipped; fund them with `npm run fund:relayers`.
 const POOL_SIZE = 4;
 const MIN_BALANCE = ethers.parseEther("0.01");
 
 export function relayerKeys(env) {
-  const base = ethers.hexlify(env.RELAYER_PRIVATE_KEY.startsWith("0x") ? env.RELAYER_PRIVATE_KEY : "0x" + env.RELAYER_PRIVATE_KEY);
+  // Tolerate copy-paste noise (spaces, newline, quotes), and never echo the key in an error.
+  const raw = String(env.RELAYER_PRIVATE_KEY || "").trim().replace(/^["']|["']$/g, "").trim();
+  if (!/^(0x)?[0-9a-fA-F]{64}$/.test(raw)) throw new PublicError("RELAYER_PRIVATE_KEY sai định dạng (cần 64 ký tự hex).");
+  const base = (raw.startsWith("0x") ? raw : "0x" + raw).toLowerCase();
   const n = Math.max(1, Math.min(16, Number(env.RELAYER_POOL_SIZE) || POOL_SIZE));
   const keys = [base];
   for (let i = 1; i < n; i++) keys.push(ethers.keccak256(ethers.solidityPacked(["bytes32", "string", "uint8"], [base, "nong-trai-relayer", i])));
   return keys;
 }
 
+/** The player's own pool wallet if it holds enough AVAX, else the next one that does, else null. */
 async function pickWallet(env, provider, from) {
   const keys = relayerKeys(env);
   const start = Number(BigInt(ethers.keccak256(from)) % BigInt(keys.length));
   for (let k = 0; k < keys.length; k++) {
-    const i = (start + k) % keys.length;
-    const w = new ethers.Wallet(keys[i], provider);
-    if (i === 0 || (await provider.getBalance(w.address)) >= MIN_BALANCE) return w;
+    const w = new ethers.Wallet(keys[(start + k) % keys.length], provider);
+    if ((await provider.getBalance(w.address)) >= MIN_BALANCE) return w;
   }
+  return null;
 }
 
 export async function relayStatus(env, config) {
-  if (!env.RELAYER_PRIVATE_KEY) return json(503, { ready: false, reason: "RELAYER_PRIVATE_KEY chưa được cấu hình." });
+  if (!env.RELAYER_PRIVATE_KEY) return json(503, { ready: false, code: "relay_disabled", reason: "RELAYER_PRIVATE_KEY chưa được cấu hình." });
   const provider = new ethers.JsonRpcProvider(env.FUJI_RPC_URL || config.rpc, config.chainId, { staticNetwork: true });
   const addrs = relayerKeys(env).map((k) => new ethers.Wallet(k).address);
   const bals = await Promise.all(addrs.map((a) => provider.getBalance(a)));
   const total = bals.reduce((a, b) => a + b, 0n);
   return json(200, {
-    ready: bals[0] > 0n || bals.some((b) => b >= MIN_BALANCE),
+    ready: bals.some((b) => b >= MIN_BALANCE),
     relayer: addrs[0],
     balance: ethers.formatEther(total),
-    pool: addrs.map((a, i) => ({ address: a, balance: ethers.formatEther(bals[i]), active: i === 0 || bals[i] >= MIN_BALANCE })),
+    pool: addrs.map((a, i) => ({ address: a, balance: ethers.formatEther(bals[i]), active: bals[i] >= MIN_BALANCE })),
     forwarder: config.forwarder,
   });
 }
 
+const errText = (e) => [e?.shortMessage, e?.message, e?.error?.message, e?.info?.error?.message].filter(Boolean).join(" | ");
+
+/** notSent: true marks answers where nothing was broadcast, so the game may let a MetaMask player pay instead. */
 export async function relay(body, env, config, meta = {}) {
-  if (!env.RELAYER_PRIVATE_KEY) return json(503, { error: "Fee manager chưa bật: thiếu RELAYER_PRIVATE_KEY." });
+  if (!env.RELAYER_PRIVATE_KEY) return json(503, { error: "Fee manager chưa bật: thiếu RELAYER_PRIVATE_KEY.", code: "relay_disabled", notSent: true });
   const ipLimit = await limited("ip", meta.ip);
   if (ipLimit) return ipLimit;
   const r = body?.request;
@@ -253,13 +268,14 @@ export async function relay(body, env, config, meta = {}) {
   if (req.deadline < now || req.deadline > now + MAX_DEADLINE_S) return json(400, { error: "Hạn của request không hợp lệ." });
   const deny = policy(config, req);
   if (deny) return json(403, { error: deny });
-  const walletLimit = await limited("wallet", req.from);
-  if (walletLimit) return walletLimit;
 
   const provider = new ethers.JsonRpcProvider(env.FUJI_RPC_URL || config.rpc, config.chainId, { staticNetwork: true });
-  const wallet = await pickWallet(env, provider, req.from);
-  const fwd = new ethers.Contract(config.forwarder, FORWARDER_ABI, wallet);
-  if (!(await fwd.verify(req))) return json(400, { error: "Chữ ký không hợp lệ, đã dùng hoặc đã hết hạn." });
+  const reader = new ethers.Contract(config.forwarder, FORWARDER_ABI, provider);
+  if (!(await reader.verify(req))) return json(400, { error: "Chữ ký không hợp lệ, đã dùng hoặc đã hết hạn." });
+  // Only a request the player really signed counts against that player's limits, so nobody can use up
+  // someone else's allowance with forged requests (the IP limit above bounds unsigned attempts).
+  const walletLimit = await limited("wallet", req.from);
+  if (walletLimit) return walletLimit;
   // Simulate the inner call exactly as the forwarder will make it (ERC-2771: data ‖ signer, sent by the
   // forwarder), so the player sees the target's own revert reason instead of a generic FailedInnerCall.
   try {
@@ -267,29 +283,52 @@ export async function relay(body, env, config, meta = {}) {
   } catch (e) {
     return json(422, { error: "Giao dịch sẽ thất bại: " + explain(e) });
   }
+  const wallet = await pickWallet(env, provider, req.from);
+  if (!wallet) return json(503, { error: "Ví trả gas của fee manager đã hết AVAX, đội đang nạp thêm.", code: "relay_empty", notSent: true });
+  const fwd = reader.connect(wallet);
+
   // Several players can share one pool wallet and the public Fuji RPC does not show pending transactions, so
-  // requests arriving together can pick the same nonce: the node keeps one and silently drops the others.
-  // So only answer once the transaction is mined (Fuji: ~2 s). If it was dropped, the forwarder still accepts
-  // the request (verify() is true until it runs), and it is sent again with a fresh nonce. It can never run twice.
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // requests arriving together can pick the same nonce: the node keeps one and drops the others. So wait for a
+  // receipt (Fuji: ~2 s), and before every re-send check that none of our broadcasts has run the request yet:
+  // verify() turns false once it has executed, and the forwarder never runs it twice.
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  const sent = [];
+  const mined = async () => {
+    for (const h of sent) {
+      const rc = await provider.getTransactionReceipt(h).catch(() => null);
+      if (rc) return rc;
+    }
+    return null;
+  };
+  const done = (rc) => json(200, { hash: rc.hash, relayer: wallet.address, status: rc.status });
   let lastError = null;
   for (let attempt = 0; attempt < 6; attempt++) {
-    if (attempt) await sleep(200 + Math.random() * 700);
+    if (attempt) {
+      await sleep(200 + Math.random() * 700);
+      const rc = await mined();
+      if (rc) return done(rc);
+      if (sent.length && !(await reader.verify(req).catch(() => true))) break; // ran, receipt not visible yet
+    }
     let tx;
     try {
       const nonce = await provider.getTransactionCount(wallet.address, "latest");
       tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n, nonce });
+      sent.push(tx.hash);
     } catch (e) {
       lastError = e;
-      const m = String(e?.shortMessage || e?.message || e);
-      if (/nonce|replacement|already known|underpriced/i.test(m)) continue;
-      throw e;
+      if (/nonce|replacement|already known|underpriced|could not coalesce/i.test(errText(e))) continue;
+      console.error("[relay] send failed:", errText(e));
+      break;
     }
     const rc = await provider.waitForTransaction(tx.hash, 1, 6_000).catch(() => null);
-    if (rc) return json(200, { hash: tx.hash, relayer: wallet.address, status: rc.status });
-    // not mined in time: either dropped, or still waiting
-    if (!(await fwd.verify(req).catch(() => true))) return json(200, { hash: tx.hash, relayer: wallet.address });
+    if (rc) return done(rc);
   }
-  console.warn("[relay] gave up", lastError?.shortMessage || lastError?.message || "not mined");
-  return json(503, { error: "Fee manager đang bận, thử lại sau vài giây." });
+  if (sent.length) {
+    // Broadcast but not confirmed yet: the game keeps waiting on these hashes. Never tell the player to pay again.
+    const rc = await mined();
+    if (rc) return done(rc);
+    return json(202, { hash: sent[sent.length - 1], hashes: sent, relayer: wallet.address, pending: true });
+  }
+  console.warn("[relay] gave up:", lastError ? errText(lastError) : "not sent");
+  return json(503, { error: "Fee manager đang bận, thử lại sau vài giây.", notSent: true });
 }

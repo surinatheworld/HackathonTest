@@ -48,6 +48,7 @@
       "function poolPrice() view returns (uint256)",
       "function reserveUsdc() view returns (uint256)",
       "function reserveAvax() view returns (uint256)",
+      "function totalShares() view returns (uint256)",
       "function positionOf(address) view returns (uint256 shares, uint256 usdcPart, uint256 avaxPart, uint256 valueUsdc)",
     ],
     items: [
@@ -58,6 +59,7 @@
       "function claimedCrop(uint256) view returns (bool)",
       "function canEarn(address,uint256,uint256) view returns (bool)",
       "function fishSince(address) view returns (uint64)",
+      "function fishSeen(address) view returns (uint64)",
       "function safeSince(address) view returns (uint64)",
       "function feePerUnit() view returns (uint256)",
       "function feePool() view returns (uint256)",
@@ -76,7 +78,8 @@
     ],
     quests: [
       "function status(address) view returns (uint256 quest, bool ready, uint256 reward)",
-      "function complete()",
+      "function complete(uint256 hint)",
+      "function hintFor(address,uint256) view returns (bool ready, uint256 hint)",
       "function rewardPool() view returns (uint256)",
       "error NotDoneYet(uint256 quest)",
       "error AllDone()",
@@ -159,7 +162,7 @@
     { ch: 4, title: "Hái trộm", how: "Hỏi bạn bè địa chỉ ví, hái trộm điểm chín của họ ở Vườn bác Tư.", zone: "neighbor", reward: 30 },
     { ch: 4, title: "Thuê người giữ vườn", how: "Ở Vườn bác Tư, bấm Thuê người giữ vườn.", zone: "neighbor", reward: 30 },
     { ch: 5, title: "Nông dân chăm chỉ", how: "Tưới cây 7 ngày liên tục, rồi nhận huy hiệu trong Kho đồ.", zone: "inventory", reward: 50 },
-    { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ hệ số an toàn từ 1,5 trong 3 ngày, rồi nhận huy hiệu.", zone: "inventory", reward: 80 },
+    { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ nguyên khoản vay 3 ngày với hệ số an toàn từ 1,5, rồi nhận huy hiệu.", zone: "inventory", reward: 80 },
     { ch: 5, title: "Kiên nhẫn", how: "Thu hoạch một cây sầu riêng 90 ngày (khoảng 90 phút), rồi nhận huy hiệu.", zone: "inventory", reward: 100 },
     { ch: 5, title: "Lão nông", how: "Có đủ 5 huy hiệu bài học, rồi nhận huy hiệu Lão nông.", zone: "inventory", reward: 200 },
   ];
@@ -314,13 +317,13 @@
   const KIND = 1_000_000_000n;
   /** Catalog shown in the game. Badges: soulbound, earned by a DeFi lesson. Cosmetics: points or crafting. */
   const CATALOG = {
-    1: { name: "Ớt", icon: "chili", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây ớt. Hỏng sau 7 ngày." },
-    2: { name: "Xoài", icon: "mango", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây xoài. Hỏng sau 7 ngày." },
-    3: { name: "Sầu riêng", icon: "durian", rarity: "hiếm", kind: "produce", desc: "Thu hoạch từ cây sầu riêng 90 ngày. Hỏng sau 7 ngày." },
+    1: { name: "Ớt", icon: "chili", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây ớt. Hỏng sau 7 ngày kể từ ngày cây chín." },
+    2: { name: "Xoài", icon: "mango", rarity: "thường", kind: "produce", desc: "Thu hoạch từ cây xoài. Hỏng sau 7 ngày kể từ ngày cây chín." },
+    3: { name: "Sầu riêng", icon: "durian", rarity: "hiếm", kind: "produce", desc: "Thu hoạch từ cây sầu riêng 90 ngày. Hỏng sau 7 ngày kể từ ngày cây chín." },
     1001: { name: "Hạt giống đầu tiên", icon: "seed", rarity: "huy hiệu", kind: "badge", desc: "Gửi tiền vào Ruộng rau lần đầu.", lesson: "Gửi tiết kiệm" },
     1002: { name: "Kiên nhẫn", icon: "hourglass", rarity: "huy hiệu", kind: "badge", desc: "Thu hoạch một cây sầu riêng 90 ngày.", lesson: "Khóa càng lâu, lãi càng cao" },
-    1003: { name: "Người nuôi cá", icon: "fish", rarity: "huy hiệu", kind: "badge", desc: "Giữ cá trong Ao cá 3 ngày.", lesson: "Góp thanh khoản" },
-    1004: { name: "Vay an toàn", icon: "shield", rarity: "huy hiệu", kind: "badge", desc: "Đang vay ở Hợp tác xã mà giữ hệ số an toàn từ 1,5 trở lên trong 3 ngày.", lesson: "Vay có trách nhiệm" },
+    1003: { name: "Người nuôi cá", icon: "fish", rarity: "huy hiệu", kind: "badge", desc: "Giữ cá trong Ao cá 3 ngày, mỗi ngày game bấm Điểm danh một lần.", lesson: "Góp thanh khoản" },
+    1004: { name: "Vay an toàn", icon: "shield", rarity: "huy hiệu", kind: "badge", desc: "Giữ nguyên một khoản vay ở Hợp tác xã 3 ngày (không trả, không vay thêm), hệ số an toàn từ 1,5 trở lên.", lesson: "Vay có trách nhiệm" },
     1005: { name: "Nông dân chăm chỉ", icon: "can", rarity: "huy hiệu", kind: "badge", desc: "Tưới cây 7 ngày liên tục.", lesson: "Kiên trì" },
     1006: { name: "Lão nông", icon: "crown", rarity: "huyền thoại", kind: "badge", desc: "Có đủ 5 huy hiệu trên.", lesson: "Tốt nghiệp DeFi cơ bản" },
     1007: { name: "Cúp mùa vụ", icon: "trophy", rarity: "huyền thoại", kind: "badge", desc: "Top 10 cuối mùa. Mỗi mùa chỉ có 10 cúp." },
@@ -344,9 +347,10 @@
   async function readItems(a, crops) {
     if (!itemsR) return null;
     const harvested = crops.filter((cr) => cr.status === "Harvested");
-    const [inv, points, hat, today, fishSince, safeSince, feePerUnit, claimed] = await Promise.all([
+    const [inv, points, hat, today, fishSince, safeSince, feePerUnit, claimed, fishSeen] = await Promise.all([
       itemsR.itemsOf(a), itemsR.pointsOf(a), itemsR.hatOf(a), itemsR.today(), itemsR.fishSince(a), itemsR.safeSince(a), itemsR.feePerUnit(),
       Promise.all(harvested.map((cr) => itemsR.claimedCrop(cr.id))),
+      itemsR.fishSeen(a),
     ]);
     const durian = harvested.find((cr) => cr.tier === 2);
     const can = await Promise.all(CH.BADGES.slice(0, 6).map((b) => itemsR.canEarn(a, b, b === 1002 && durian ? durian.id : 0)));
@@ -362,7 +366,7 @@
       unclaimed: harvested.filter((_, i) => !claimed[i]).map((cr) => cr.id),
       durianCrop: durian ? durian.id : 0,
       badges: CH.BADGES.map((b, i) => ({ id: b, ...CATALOG[b], owned: owns(b), can: i < 6 ? can[i] : false })),
-      fishSince: Number(fishSince), safeSince: Number(safeSince),
+      fishSince: Number(fishSince), safeSince: Number(safeSince), fishSeen: Number(fishSeen),
     };
   }
 
@@ -428,9 +432,11 @@
     if (!r.ok) {
       const err = new Error(j.error || `Fee manager trả lỗi ${r.status}`);
       err.relayStatus = r.status;
+      err.notSent = !!j.notSent; // the fee manager broadcast nothing for this request
       throw err;
     }
-    return j.hash;
+    // 202: broadcast but not confirmed yet. Any of these hashes may be the one that runs the request.
+    return j.hashes?.length ? j.hashes : [j.hash];
   }
 
   // ---------- per-player gas stats: how fast each transaction confirmed and what the fee manager paid ----------
@@ -457,23 +463,26 @@
     emit();
     try {
       const data = iface.encodeFunctionData(fn, args);
-      let hash;
+      let hashes;
       try {
-        hash = await relayed(target, data, gas);
+        hashes = await relayed(target, data, gas);
         CH.lastPath = "gasless";
       } catch (e) {
-        // Fee manager not configured yet: MetaMask users can still pay their own gas.
-        if (e.relayStatus === 503 && CH.walletKind === "metamask") {
+        // The fee manager is off, empty or busy and sent nothing: MetaMask users can pay their own gas. Never
+        // when it may have broadcast already, or the action would run twice.
+        if (e.relayStatus === 503 && e.notSent && CH.walletKind === "metamask") {
           await switchToFuji();
           sentAt = performance.now();
           const tx = await signer.sendTransaction({ to: target, data, gasLimit: gas });
-          hash = tx.hash;
+          hashes = [tx.hash];
           CH.lastPath = "self-paid";
         } else throw e;
       }
+      let hash = hashes[hashes.length - 1];
       CH.lastTx = { hash, label };
       emit();
-      const rc = await rp.waitForTransaction(hash, 1, 120_000);
+      const rc = await Promise.any(hashes.map((h) => rp.waitForTransaction(h, 1, 120_000).then((x) => x || Promise.reject()))).catch(() => null);
+      if (rc) CH.lastTx.hash = hash = rc.hash;
       if (!rc || rc.status !== 1) throw new Error("Giao dịch thất bại trên chain: " + hash);
       await recordTx(rc, CH.lastPath, Math.round(performance.now() - sentAt)).catch(() => {});
       return rc;
@@ -512,11 +521,13 @@
   const GI = 250_000;
   CH.completeQuest = () => {
     const q = CH.data?.quest;
-    return run(`Nhận thưởng nhiệm vụ: ${CH.QUESTS[q?.index]?.title || ""}`, c.quests, questsI, "complete", [], 300_000);
+    // The contract checks only the record named by the hint (a crop for quests 2 and 4), so gas stays flat.
+    return questsR.hintFor(CH.account, BigInt(q?.index ?? 0)).then(([, hint]) =>
+      run(`Nhận thưởng nhiệm vụ: ${CH.QUESTS[q?.index]?.title || ""}`, c.quests, questsI, "complete", [hint], 300_000));
   };
   CH.claimHarvest = (cropId) => run(`Nhận nông sản cây #${cropId}`, c.items, itemsI, "claimHarvest", [cropId], GI);
   CH.claimBadge = (id, arg = 0) => run(`Nhận huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "claimBadge", [id, arg], GI);
-  CH.startWatch = (id) => run(`Bắt đầu tính ngày cho huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "startWatch", [id], GI);
+  CH.startWatch = (id) => run(`Điểm danh huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "startWatch", [id], GI);
   CH.buyItem = (id, n = 1) => run(`Mua ${CATALOG[id]?.name || id}`, c.items, itemsI, "buy", [id, n], GI);
   CH.equipHat = (id) => run(id ? `Đội ${CATALOG[id]?.name}` : "Đội nón lá thường", c.items, itemsI, "equipHat", [id], GI);
   CH.discard = (id, n) => run("Bỏ nông sản hỏng", c.items, itemsI, "discard", [BigInt(id), n], GI);
@@ -575,18 +586,30 @@
   };
 
   // ---------- Ao cá ----------
+  // FarmPond's own integer math, mirrored so zaps carry a real slippage limit: a bot that moves the price
+  // right before a player's zap makes the zap revert instead of taking part of the deposit.
+  const isqrt = (n) => { if (n < 2n) return n; let x = n, y = (x + 1n) / 2n; while (y < x) { x = y; y = (x + n / x) / 2n; } return x; };
+  const pondSwapOut = (amountIn, rIn, rOut) => { const f = amountIn * 9_970n; return (f * rOut) / (rIn * 10_000n + f); };
+  const pondState = async () => { const [ru, ra, ts] = await Promise.all([pondR.reserveUsdc(), pondR.reserveAvax(), pondR.totalShares()]); return { ru, ra, ts }; };
   CH.pondAdd = async (v) => {
     await ensureAllowance(U(v), c.pond, usdcR, "Cho phép Ao cá dùng USDC");
-    return run("Thả cá vào ao", c.pond, pondI, "zapIn", [U(v), 1], GAS.pond);
+    const amount = U(v);
+    const { ru, ra, ts } = await pondState();
+    const swapIn = (isqrt(ru * (ru * 3_988_009n + amount * 3_988_000n)) - ru * 1_997n) / 1_994n;
+    const avaxOut = pondSwapOut(swapIn, ru, ra);
+    const a = ((amount - swapIn) * ts) / (ru + swapIn), b = (avaxOut * ts) / (ra - avaxOut);
+    return run("Thả cá vào ao", c.pond, pondI, "zapIn", [amount, minus(a < b ? a : b)], GAS.pond);
   };
   /** Take out a fraction (0..1] of the position, paid out in USDC. */
   CH.pondOut = async (fraction = 1) => {
     const p = await pondR.positionOf(CH.account);
     if (p.shares === 0n) throw new Error("Ao đang trống.");
     const shares = fraction >= 1 ? p.shares : (p.shares * BigInt(Math.round(fraction * 10_000))) / 10_000n;
-    const sold = await pondR.quote(false, (p.avaxPart * shares) / p.shares);
-    const min = minus((p.usdcPart * shares) / p.shares + sold);
-    return run("Vớt cá", c.pond, pondI, "zapOut", [shares, min], GAS.pond);
+    // zapOut burns first, then sells the gAVAX part into the smaller pool that is left.
+    const { ru, ra, ts } = await pondState();
+    const usdcPart = (ru * shares) / ts, avaxPart = (ra * shares) / ts;
+    const sold = pondSwapOut(avaxPart, ra - avaxPart, ru - usdcPart);
+    return run("Vớt cá", c.pond, pondI, "zapOut", [shares, minus(usdcPart + sold)], GAS.pond);
   };
   CH.pondSwap = async (usdcIn, v) => {
     const amount = usdcIn ? U(v) : A(v);

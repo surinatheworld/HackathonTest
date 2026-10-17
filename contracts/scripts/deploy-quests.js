@@ -18,7 +18,7 @@ async function main() {
   console.log("FarmQuests", quests.target);
   const usdc = await ethers.getContractAt("GaslessUSDC", d.usdc);
   const pool = ethers.parseUnits(process.env.QUEST_POOL || "20000", 6);
-  await (await usdc.mint(me.address, pool)).wait();
+  if ((await usdc.balanceOf(me.address)) < pool) await (await usdc.mint(me.address, pool)).wait();
   await (await usdc.transfer(quests.target, pool)).wait();
   console.log("Reward pool", ethers.formatUnits(await quests.rewardPool(), 6), "USDC");
 

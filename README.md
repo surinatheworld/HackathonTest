@@ -31,11 +31,11 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
 - **FarmCoop** (Hợp tác xã): gửi gAVAX làm thế chấp, vay USDC tối đa 60% giá trị theo giá **Chainlink AVAX/USD** trên Fuji, lãi vay 8%/năm. Khi nợ vượt 75% giá trị, bất kỳ ai cũng có thể trả nợ thay và nhận gAVAX kèm 10% phạt. Giá cũ hơn 2 ngày thì không cho vay.
 - **FarmPond** (Ao cá và Chợ phiên): pool x·y = k USDC/gAVAX, phí 0,3% chia cho người thả cá. `zapIn`/`zapOut` cho người chỉ có USDC. Impermanent loss trong game là thật.
 - **FarmItems** (Kho đồ, ERC-1155):
-  - **Nông sản**: thu hoạch cây là nhận ớt, xoài, sầu riêng. Để quá 7 ngày game thì hỏng, nên không ai tích trữ để đầu cơ.
-  - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
+  - **Nông sản**: thu hoạch cây là nhận ớt, xoài, sầu riêng. Nông sản tính tuổi từ ngày cây chín (không phải ngày bấm nhận), quá 7 ngày game thì hỏng, nên không ai tích trữ để đầu cơ.
+  - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu cần thời gian phải giữ thật: Ao cá điểm danh mỗi ngày game và không được rút bớt, Hợp tác xã phải giữ nguyên khoản vay 3 ngày. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
   - **Đồ trang trí**: mua bằng điểm mùa, hoặc ghép từ nông sản thành Mâm ngũ quả. Nón lá đội lên được cho nhân vật, đồ trang trí bày ở Nhà mình.
   - **Chợ đổi đồ**: chỉ đổi đồ lấy đồ, contract giữ đồ hộ trong lúc chờ. Phí là 1 điểm mùa cho mỗi món đưa ra. Vật phẩm chỉ đổi chủ qua chợ, nên không lách được phí, và **không có cách nào đổi vật phẩm ra USDC**.
-- **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy). Thưởng trả từ quỹ thưởng 20.000 USDC nạp sẵn trong contract, không in thêm token; hết quỹ thì nhiệm vụ chờ đội nạp thêm.
+- **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy). Thưởng trả từ quỹ thưởng 20.000 USDC nạp sẵn trong contract, không in thêm token; hết quỹ thì nhiệm vụ chờ đội nạp thêm. Mỗi lần nhận thưởng tốn cùng một lượng gas dù người chơi đã chơi bao lâu: contract chỉ xem đúng một bản ghi (`complete(hint)`), không quét lịch sử.
   - Mở khoá lần lượt. Contract tự kiểm tra trên chain là người chơi đã làm thật.
   - Thưởng USDC test tăng dần từ 10 đến 200, tổng 760. Lên mainnet thì thưởng đổi sang điểm hoặc đồ trang trí, không trả tiền thật.
   - Contract không có owner.
@@ -63,8 +63,8 @@ Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md))
 | GaslessUSDC | [`0x794659AB388EEec7f80038191bA763f900CE1978`](https://testnet.snowtrace.io/address/0x794659AB388EEec7f80038191bA763f900CE1978#code) |
 | GaslessAVAX (gAVAX) | [`0xa1e8250Bcbab7436252e3c25764f8898913E7c1C`](https://testnet.snowtrace.io/address/0xa1e8250Bcbab7436252e3c25764f8898913E7c1C#code) |
 | FarmForwarder | [`0x7dD93fef1ce942f11fc72E5BD7F53f749A028636`](https://testnet.snowtrace.io/address/0x7dD93fef1ce942f11fc72E5BD7F53f749A028636#code) |
-| FarmQuests | [`0x3dcB3f38689f992923E5D479eB25E4b8B8aCE3eb`](https://testnet.snowtrace.io/address/0x3dcB3f38689f992923E5D479eB25E4b8B8aCE3eb#code) |
-| FarmItems | [`0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174`](https://testnet.snowtrace.io/address/0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174#code) |
+| FarmQuests | [`0xFD14B33AE634009B1446F05539e09B8dAE4B0d0C`](https://testnet.snowtrace.io/address/0xFD14B33AE634009B1446F05539e09B8dAE4B0d0C#code) |
+| FarmItems | [`0xD05bF2DCdb07b8f16584e4F81E8e4fbBc77Ce847`](https://testnet.snowtrace.io/address/0xD05bF2DCdb07b8f16584e4F81E8e4fbBc77Ce847#code) |
 | ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
 | MockYieldSource (bản cũ, tự mint lãi) | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
 | MockYieldSource (bản mới, trả lãi từ quỹ 100.000 USDC) | [`0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec`](https://testnet.snowtrace.io/address/0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec#code), chờ owner chuyển FarmGame sang (`npm run migrate:yield`) |
@@ -196,6 +196,14 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 - `npm run test:fork`: chạy trên bản sao Fuji, với đúng các contract đang deploy.
 - `npm run test:mainnet-fork`: diễn tập mainnet trên bản sao C-Chain, với USDC thật, Aave v3 thật và Chainlink thật, không tốn tiền thật. Xem [docs/MAINNET.md](docs/MAINNET.md).
 - CI (GitHub Actions) chạy test, một vòng trả gas hộ từ đầu đến cuối trên chain cục bộ, và Slither (dừng nếu có lỗi mức cao).
+
+## Soát lỗi chéo
+
+Ngày 18/10/2026, 3 agent AI soát độc lập (dòng tiền, quyền hạn, fee manager) và 1 agent kiểm chứng tìm cách bác bỏ từng lỗi, có test tái hiện. Kết quả: 17 lỗi, không lỗi nào cho phép lấy tiền của người khác, đều đã sửa và có test hồi quy:
+
+- **Contract:** nhiệm vụ hết gas với người chơi lâu năm; multisig vẫn đếm xác nhận của người đã bị thay; huy hiệu Ao cá / Vay an toàn nhận được mà không giữ thật; nông sản giữ tươi mãi bằng cách nhận muộn; đổi nguồn lãi bỏ sót lãi ở nguồn cũ (sửa trong source, FarmGame trên Fuji vẫn là bản cũ). FarmItems và FarmQuests đã deploy lại.
+- **Fee manager:** lượt trả gas bị tính trước khi kiểm tra chữ ký (ai cũng khóa được ví người khác); báo "bận" khi giao dịch còn chờ khiến người dùng MetaMask gửi lần hai; khóa có thể lộ qua thông báo lỗi; vòng gửi lại thiếu kiểm tra; bộ đếm giới hạn xóa nhầm; ví số 0 hết tiền vẫn được chọn.
+- **Giao diện và indexer:** thả cá không chống kẹp giá, "Vớt cá hết" luôn lỗi khi giữ trên 14% ao; bảng xếp hạng bị lừa bằng token giả; ví của đội hiện như hàng xóm; dev server sập với URL `/%`.
 
 ## Lịch sử: bản Game L1
 

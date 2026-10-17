@@ -720,10 +720,12 @@ LIVE.inventory={
       '<p class="label">Huy hiệu mùa vụ</p><div class="inv-grid">'+I.badges.map(b=>{let s;
         if(b.owned)s='<span class="pill g">Đã có</span>';
         else if(b.can)s=`<button class="btn primary" data-act="inv-badge" data-arg="${b.id}">Nhận</button>`;
-        else if(b.id===1003&&!I.fishSince&&CH.data.pond&&CH.data.pond.value>0)s=`<button class="btn" data-act="inv-watch" data-arg="1003">Bắt đầu tính</button>`;
-        else if(b.id===1004&&!I.safeSince&&CH.data.coop&&CH.data.coop.debt>0&&CH.data.coop.health>=1.5)s=`<button class="btn" data-act="inv-watch" data-arg="1004">Bắt đầu tính</button>`;
-        else if(b.id===1003&&I.fishSince)s=`<small>Đã giữ ${Math.max(0,I.today-I.fishSince)}/3 ngày</small>`;
-        else if(b.id===1004&&I.safeSince)s=`<small>Đã giữ ${Math.max(0,I.today-I.safeSince)}/3 ngày</small>`;
+        // Ao cá: one check-in per game day; a missed day restarts the clock (the contract enforces it).
+        else if(b.id===1003&&CH.data.pond&&CH.data.pond.value>0){const live=I.fishSince&&I.today<=I.fishSeen+1,held=live?I.today-I.fishSince:0;
+          s=live&&I.fishSeen>=I.today?`<small>Đã giữ ${held}/3 ngày · mai điểm danh tiếp</small>`:`<button class="btn" data-act="inv-watch" data-arg="1003">${live?`Điểm danh (${held}/3 ngày)`:'Bắt đầu tính'}</button>`}
+        // Hợp tác xã: started once; repaying or borrowing more changes the loan and the clock must restart.
+        else if(b.id===1004&&CH.data.coop&&CH.data.coop.debt>0&&CH.data.coop.health>=1.5)
+          s=I.safeSince&&I.today<I.safeSince+3?`<small>Đã giữ ${I.today-I.safeSince}/3 ngày · đừng trả hay vay thêm</small>`:`<button class="btn" data-act="inv-watch" data-arg="1004">${I.safeSince?'Bắt đầu lại':'Bắt đầu tính'}</button>`;
         else s=`<small>${esc(b.desc)}</small>`;
         return `<div class="inv ${rcls(b.rarity)} ${b.owned?'':'locked'}" title="${esc(b.desc)}"><span class="ic">${iconOf(b)}</span><b>${esc(b.name)}</b>${s}</div>`}).join('')+'</div>';
   },
@@ -861,7 +863,7 @@ Object.assign(ACT,{
   'w-mm'(){connectWith('metamask')},
   'inv-claim'(){const ids=CH.data?.items?.unclaimed||[];ids.reduce((p,id)=>p.then(()=>CH.claimHarvest(id)),Promise.resolve()).then(()=>{toast('Đã nhận nông sản vào Kho đồ.');icm('home','C-Chain','Nhận nông sản vào Kho đồ')}).catch(e=>toast(CH.errMsg(e)))},
   'inv-badge'(id){id=Number(id);cAct(CH.claimBadge(id,id===1002?CH.data.items.durianCrop:0).then(r=>{sent('home','claimBadge('+CH.CATALOG[id].name+')')(r);floatZ('home','Huy hiệu mới!','#f2c14e')}),'Đã nhận huy hiệu '+CH.CATALOG[id].name+'.')},
-  'inv-watch'(id){cAct(CH.startWatch(Number(id)).then(sent('home','startWatch()')),'Đã bắt đầu tính ngày. Quay lại sau 3 ngày game.')},
+  'inv-watch'(id){cAct(CH.startWatch(Number(id)).then(sent('home','startWatch()')),Number(id)===1003?'Đã điểm danh Ao cá. Mỗi ngày game điểm danh một lần, đủ 3 ngày là nhận huy hiệu.':'Đã bắt đầu tính. Giữ nguyên khoản vay 3 ngày game rồi nhận huy hiệu.')},
   'inv-buy'(id){cAct(CH.buyItem(Number(id),1).then(sent('market','buy('+CH.CATALOG[id].name+')')),'Đã mua '+CH.CATALOG[id].name+'.')},
   'inv-hat'(id){cAct(CH.equipHat(Number(id)).then(sent('home','equipHat()')),Number(id)?'Đã đội '+CH.CATALOG[id].name+'.':'Đã đội nón lá thường.')},
   'inv-discard'(id){const x=owned(id);if(!x)return;cAct(CH.discard(id,x.amount).then(sent('home','discard()')),'Đã bỏ nông sản hỏng.')},

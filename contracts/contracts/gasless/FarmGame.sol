@@ -119,8 +119,18 @@ contract FarmGame is ERC2771Context, ReentrancyGuard {
 
     // ---------- yield source (owner) ----------
 
-    function setYieldSource(address source) external onlyOwner {
+    /// Switch sources once nothing is invested. Interest the old source still holds (earned after the last
+    /// harvest) is pulled into the reward pool first, so switching never leaves money behind.
+    function setYieldSource(address source) external onlyOwner nonReentrant {
         if (invested != 0) revert SourceInUse();
+        if (address(yieldSource) != address(0)) {
+            uint256 left = yieldSource.balance();
+            if (left > 0) {
+                rewardReserve += left;
+                yieldSource.withdraw(left);
+                emit YieldHarvested(left, rewardReserve);
+            }
+        }
         yieldSource = IYieldSource(source);
         emit YieldSourceSet(source);
     }

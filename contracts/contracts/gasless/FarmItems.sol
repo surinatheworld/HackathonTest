@@ -17,11 +17,14 @@ interface IFarmGameView {
         returns (uint256 points, uint256 ripePoints, uint32 streak, uint64 lastWaterDay, uint64 lastStealDay, bool guarded, uint16 activeCrops);
     function lends(address who) external view returns (uint256 principal, uint256 accrued, uint64 last);
     function today() external view returns (uint64);
+    function readyAt(uint256 cropId) external view returns (uint256);
+    function dayLength() external view returns (uint256);
 }
 
 interface IFarmCoopView {
     function debtOf(address user) external view returns (uint256);
     function healthOf(address user) external view returns (uint256);
+    function positions(address user) external view returns (uint256 collateral, uint256 debt, uint64 last);
 }
 
 interface IFarmPondView {
@@ -29,8 +32,8 @@ interface IFarmPondView {
 }
 
 /// Kho đồ: everything a player owns that is not money, as ERC-1155 tokens on Fuji.
-///  - Nông sản (produce) from harvested orchard crops. Token id = kind * 1e9 + harvest day, and a batch spoils
-///    SHELF_DAYS game days after that day, so nobody hoards produce to speculate.
+///  - Nông sản (produce) from harvested orchard crops. Token id = kind * 1e9 + the day the crop ripened, and a batch
+///    spoils SHELF_DAYS game days after that day, however late it is harvested or claimed, so nobody hoards produce.
 ///  - Huy hiệu mùa vụ (badges): earned by doing a DeFi lesson, checked on-chain, soulbound (never move).
 ///  - Đồ trang trí (cosmetics): bought with season points or crafted from produce.
 ///  - Chợ đổi đồ: item-for-item offers held in escrow by this contract; a points fee per item unit.
@@ -46,8 +49,8 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
 
     uint256 public constant BADGE_SEED = 1001; // first deposit in Ruộng rau
     uint256 public constant BADGE_PATIENCE = 1002; // harvested a 90-day durian
-    uint256 public constant BADGE_FISH = 1003; // kept liquidity in Ao cá for FISH_DAYS
-    uint256 public constant BADGE_SAFE = 1004; // borrowed at Hợp tác xã and kept health >= 1.5 for SAFE_DAYS
+    uint256 public constant BADGE_FISH = 1003; // kept liquidity in Ao cá for FISH_DAYS, checked in every day
+    uint256 public constant BADGE_SAFE = 1004; // kept one loan untouched at Hợp tác xã for SAFE_DAYS, health >= 1.5
     uint256 public constant BADGE_DILIGENT = 1005; // watering streak >= STREAK_DAYS
     uint256 public constant BADGE_MASTER = 1006; // all five lesson badges
     uint256 public constant TROPHY = 1007; // top of a season, awarded by the owner, max 10 per season
@@ -77,8 +80,14 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
     mapping(uint256 => uint256) public price; // cosmetic id => points, 0 = not for sale
     mapping(address => uint256) public spent; // season points spent in the shop and on fees
     mapping(uint256 => bool) public claimedCrop;
+    /// Cheap facts for FarmQuests, so quests never scan a player's whole history.
+    mapping(address => bool) public gotProduce; // claimed produce at least once
+    mapping(address => uint256) public offersMade; // market offers posted
     mapping(address => uint64) public fishSince;
+    mapping(address => uint64) public fishSeen; // last day the player checked in at Ao cá
+    mapping(address => uint256) public fishShares; // pond shares at the start; holding fewer restarts the clock
     mapping(address => uint64) public safeSince;
+    mapping(address => uint64) public safeLoan; // FarmCoop position.last at the start: any repay/borrow/liquidation changes it
     mapping(address => uint256) public hatOf;
     mapping(uint256 => uint256) public trophiesAwarded; // season => count
     mapping(uint256 => mapping(address => bool)) public trophyWinner;
@@ -262,7 +271,9 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         claimedCrop[cropId] = true;
         uint256 extra = planted / 50e6;
         amount = (tier == 0 ? 3 : tier == 1 ? 2 : 1) + (extra > 4 ? 4 : extra);
-        itemId = (uint256(tier) + 1) * KIND + uint256(today());
+        // Dated by the day the crop ripened, not the day it is claimed, so produce cannot be kept fresh by waiting.
+        itemId = (uint256(tier) + 1) * KIND + game.readyAt(cropId) / game.dayLength();
+        gotProduce[u] = true;
         _mint(u, itemId, amount, "");
         emit HarvestClaimed(u, cropId, itemId, amount);
     }
@@ -276,16 +287,28 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
 
     // ---------- huy hiệu ----------
 
-    /// Start the clock for the badges that need time (Ao cá, Hợp tác xã). Safe to call again.
+    /// Start, or keep going, the clock for the badges that need time.
+    /// Ao cá: call it once every game day (a check-in). Missing a day, or holding fewer pond shares than at the
+    /// start, restarts the clock. Hợp tác xã: call it once; repaying, borrowing more, withdrawing collateral or
+    /// being liquidated changes the loan, and the clock no longer counts (call again to restart).
     function startWatch(uint256 badgeId) external {
         address u = _msgSender();
         uint64 d = today();
         if (badgeId == BADGE_FISH) {
-            if (pond.sharesOf(u) == 0) revert NotEligible();
-            if (fishSince[u] == 0) fishSince[u] = d;
+            uint256 shares = pond.sharesOf(u);
+            if (shares == 0) revert NotEligible();
+            if (fishSince[u] == 0 || d > fishSeen[u] + 1 || shares < fishShares[u]) {
+                fishSince[u] = d;
+                fishShares[u] = shares;
+            }
+            fishSeen[u] = d;
         } else if (badgeId == BADGE_SAFE) {
             if (coop.debtOf(u) == 0 || coop.healthOf(u) < SAFE_HEALTH_BPS) revert NotEligible();
-            if (safeSince[u] == 0) safeSince[u] = d;
+            (,, uint64 last) = coop.positions(u);
+            if (safeSince[u] == 0 || last != safeLoan[u]) {
+                safeSince[u] = d;
+                safeLoan[u] = last;
+            }
         } else {
             revert NotEligible();
         }
@@ -304,11 +327,14 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         }
         if (badgeId == BADGE_FISH) {
             uint64 s = fishSince[u];
-            return s != 0 && today() >= s + FISH_DAYS && pond.sharesOf(u) > 0;
+            uint64 d = today();
+            return s != 0 && d >= s + FISH_DAYS && d <= fishSeen[u] + 1 && pond.sharesOf(u) >= fishShares[u];
         }
         if (badgeId == BADGE_SAFE) {
             uint64 s = safeSince[u];
-            return s != 0 && today() >= s + SAFE_DAYS && coop.debtOf(u) > 0 && coop.healthOf(u) >= SAFE_HEALTH_BPS;
+            (,, uint64 last) = coop.positions(u);
+            return s != 0 && today() >= s + SAFE_DAYS && last == safeLoan[u] && coop.debtOf(u) > 0
+                && coop.healthOf(u) >= SAFE_HEALTH_BPS;
         }
         if (badgeId == BADGE_DILIGENT) {
             (,, uint32 streak,,,,) = game.farmers(u);
@@ -395,6 +421,7 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         o.wantIds = legs.wantIds;
         o.wantAmts = legs.wantAmts;
         offerId = _offers.length - 1;
+        offersMade[u]++;
         emit OfferMade(offerId, u, taker, o.expires, fee);
     }
 

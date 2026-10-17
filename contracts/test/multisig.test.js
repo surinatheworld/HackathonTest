@@ -56,7 +56,7 @@ describe("FarmMultisig: the team's 2-of-3 wallet that owns the pooled money", ()
     await ms.connect(an).submit(game, 0, game.interface.encodeFunctionData("setYieldSource", [ethers.ZeroAddress]));
     await ms.connect(binh).confirm(0);
     await ms.connect(binh).revoke(0);
-    expect((await ms.getCall(0)).confirmations).to.equal(1n);
+    expect(await ms.confirmations(0)).to.equal(1n);
     await expect(ms.connect(an).execute(0)).to.be.revertedWithCustomError(ms, "NotEnoughConfirmations");
     await expect(ms.connect(binh).revoke(0)).to.be.revertedWithCustomError(ms, "NotConfirmed");
   });
@@ -67,6 +67,29 @@ describe("FarmMultisig: the team's 2-of-3 wallet that owns the pooled money", ()
     await ms.connect(binh).confirm(0);
     await expect(ms.connect(an).execute(0)).to.be.revertedWithCustomError(ms, "CallFailed");
     expect((await ms.getCall(0)).executed).to.equal(false);
+  });
+
+  it("a replaced key's confirmations stop counting, even if the address comes back later", async () => {
+    const { deployer, an, binh, chi, stranger, ms, token, quests } = await deploy();
+    // chi's key is stolen: the thief queues a withdrawal and confirms it
+    await ms.connect(chi).submit(quests, 0, quests.interface.encodeFunctionData("withdrawPool", [chi.address, usdc(1_000)]));
+    expect(await ms.confirmations(0)).to.equal(1n);
+    // the team replaces chi with a fresh key
+    await ms.connect(an).submit(ms, 0, ms.interface.encodeFunctionData("replaceOwner", [chi.address, stranger.address]));
+    await ms.connect(binh).confirm(1);
+    await ms.connect(an).execute(1);
+    expect(await ms.confirmations(0)).to.equal(0n);
+    expect(await ms.confirmedBy(0, chi)).to.equal(false);
+    // one honest confirmation is no longer enough
+    await ms.connect(stranger).confirm(0);
+    await expect(ms.connect(stranger).execute(0)).to.be.revertedWithCustomError(ms, "NotEnoughConfirmations").withArgs(1, 2);
+    // and if chi's address is ever made an owner again, the old confirmation stays dead
+    await ms.connect(an).submit(ms, 0, ms.interface.encodeFunctionData("replaceOwner", [stranger.address, chi.address]));
+    await ms.connect(binh).confirm(2);
+    await ms.connect(an).execute(2);
+    expect(await ms.confirmedBy(0, chi)).to.equal(false);
+    expect(await ms.confirmations(0)).to.equal(0n);
+    expect(await quests.rewardPool()).to.equal(usdc(1_000));
   });
 
   it("a lost key is replaced only by a 2-of-3 decision", async () => {

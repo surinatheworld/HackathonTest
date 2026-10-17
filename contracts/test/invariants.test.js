@@ -143,7 +143,7 @@ describe("Invariants under random play (seeded stateful fuzzing)", function () {
         (p) => coop.connect(p).repay(p.address, U(1 + r.int(600))),
         (p) => coop.connect(p).liquidate(r.pick(players).address),
         () => feed.connect(owner).setPrice(ethers.parseUnits(String(5 + r.int(30)), 8)),
-        (p) => quests.connect(p).complete(),
+        async (p) => quests.connect(p).complete((await quests.hintFor(p, await quests.progress(p)))[1]),
         () => time.increase(1 + r.int(DAY * 20)),
       ];
       for (let i = 0; i < STEPS; i++) {

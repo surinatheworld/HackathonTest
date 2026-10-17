@@ -2,7 +2,7 @@
 // subgraph of our own) and turns it into what the game shows: fee manager totals, a village news feed, the
 // quest leaderboard and recently active neighbours. Cached for 30 s per Cloudflare isolate and colo.
 import { ethers } from "./ethers.min.js";
-import { relayerKeys } from "./relay-core.js";
+import { relayerKeys, PublicError } from "./relay-core.js";
 
 const API = "https://data-api.avax.network/v1/chains";
 const TTL_S = 30;
@@ -17,7 +17,7 @@ async function list(env, chainId, path, key, pages = PAGES) {
   for (let i = 0; i < pages; i++) {
     const url = `${API}/${chainId}/${path}${path.includes("?") ? "&" : "?"}pageSize=100${token ? `&pageToken=${token}` : ""}`;
     const r = await fetch(url, { headers });
-    if (!r.ok) throw new Error(`Data API ${r.status} ${path}`);
+    if (!r.ok) throw new PublicError(`Avalanche Data API trả lỗi ${r.status}, thử lại sau.`);
     const j = await r.json();
     out.push(...(j[key] || []));
     token = j.nextPageToken;
@@ -46,8 +46,10 @@ function label(t, c) {
 async function build(env, config) {
   const chainId = config.chainId;
   const c = Object.fromEntries(Object.entries(config).map(([k, v]) => [k, lc(String(v))]));
-  // Not players: the farm contracts and the team's own wallets (fee manager pool, which is also the deployer).
-  const contracts = new Set([c.game, c.coop, c.pond, c.quests, c.items, c.forwarder, c.usdc, c.gavax].filter(Boolean));
+  // Not players: the farm contracts, the yield sources, and the team's own wallets (owner, multisig, butler,
+  // fee manager pool, which is also the deployer). relay-config.js lists the extra ones under notPlayers.
+  const contracts = new Set([c.game, c.coop, c.pond, c.quests, c.items, c.forwarder, c.usdc, c.gavax, c.butler].filter(Boolean));
+  for (const a of config.notPlayers || []) contracts.add(lc(a));
   if (env.RELAYER_PRIVATE_KEY) for (const k of relayerKeys(env)) contracts.add(lc(new ethers.Wallet(k).address));
   const [txs, transfers, rewards, butlerTxs] = await Promise.all([
     list(env, chainId, `addresses/${config.forwarder}/transactions`, "transactions"),
@@ -78,12 +80,16 @@ async function build(env, config) {
     if (!farmers.has(l.who)) farmers.set(l.who, t.blockTimestamp);
   }
 
-  // Quest leaderboard: each reward transfer out of FarmQuests is one completed quest.
+  // Quest leaderboard: each reward transfer out of FarmQuests is one completed quest. Only real test-USDC
+  // transfers of a real reward amount count, so a fake token emitting Transfer events from FarmQuests, or the
+  // owner taking unused rewards back, cannot show up as quests.
+  const REWARDS = new Set([10, 20, 30, 40, 50, 80, 100, 200].map((n) => String(n * 1e6)));
   const done = new Map();
   for (const t of rewards.items) {
     const tr = t.erc20Transfer || t;
-    if (lc(tr.from?.address) !== c.quests) continue;
+    if (lc(tr.from?.address) !== c.quests || lc(tr.erc20Token?.address) !== c.usdc || !REWARDS.has(String(tr.value))) continue;
     const who = lc(tr.to?.address);
+    if (contracts.has(who)) continue;
     const e = done.get(who) || { who, quests: 0, usdc: 0, at: 0 };
     e.quests++;
     e.usdc += usd(tr.value);

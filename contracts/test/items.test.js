@@ -58,7 +58,8 @@ async function deploy() {
     await game.connect(who).harvest(id);
     return id;
   };
-  const produceId = async (kind) => BigInt(kind) * KIND + (await game.today());
+  /** produce batches are dated by the day the crop ripened */
+  const produceId = async (kind, crop) => BigInt(kind) * KIND + (await game.readyAt(crop)) / BigInt(DAY);
   return { owner, alice, bob, carol, token, gavax, feed, game, coop, pond, items, relay, grow, produceId };
 }
 
@@ -68,7 +69,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     const crop = await grow(alice, 0, 100); // chili, 3 + 2 extra for 100 USDC
     await expect(items.connect(bob).claimHarvest(crop)).to.be.revertedWithCustomError(items, "NotYourCrop");
     await items.connect(alice).claimHarvest(crop);
-    const id = 1n * KIND + (await game.today());
+    const id = 1n * KIND + (await game.readyAt(crop)) / BigInt(DAY);
     expect(await items.balanceOf(alice, id)).to.equal(5n);
     await expect(items.connect(alice).claimHarvest(crop)).to.be.revertedWithCustomError(items, "AlreadyClaimed");
     await game.connect(alice).plant(1, usdc(10));
@@ -120,7 +121,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     await pond.connect(alice).zapIn(usdc(50), 1);
     await items.connect(alice).startWatch(1003);
     expect(await items.canEarn(alice, 1003, 0)).to.equal(false);
-    await time.increase(3 * DAY);
+    for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); } // daily check-in
     await items.connect(alice).claimBadge(1003, 0);
     // Vay an toàn: debt with health >= 1.5 kept 3 days
     await coop.connect(alice).depositCollateral(avax(10));
@@ -161,14 +162,15 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     const { alice, bob, game, items, produceId } = await deploy();
     // both plant on the same day and harvest together, so both batches are fresh
     await game.connect(bob).plant(2, usdc(10)); // crop 1: durian, 10 pts
-    await game.connect(alice).plant(0, usdc(100)); // crop 2: chili x5, 100 pts
-    await time.increase(90 * DAY + 1);
+    await time.increase(83 * DAY);
+    await game.connect(alice).plant(0, usdc(100)); // crop 2: chili x5, 100 pts, ripe the same day
+    await time.increase(7 * DAY + 1);
     await game.connect(bob).harvest(1);
     await game.connect(alice).harvest(2);
     await items.connect(bob).claimHarvest(1);
     await items.connect(alice).claimHarvest(2);
-    const fresh = await produceId(1);
-    const durian = await produceId(3);
+    const fresh = await produceId(1, 2n);
+    const durian = await produceId(3, 1n);
     await items.connect(alice).makeOffer({ giveIds: [fresh], giveAmts: [3], wantIds: [3n * KIND], wantAmts: [1] }, ethers.ZeroAddress, 2);
     expect(await items.balanceOf(alice, fresh)).to.equal(2n); // 3 in escrow
     expect(await items.balanceOf(await items.getAddress(), fresh)).to.equal(3n);
@@ -188,8 +190,9 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
 
   it("splitting a trade into many small ones costs the same fee", async () => {
     const { alice, items, grow, produceId } = await deploy();
-    await items.connect(alice).claimHarvest(await grow(alice, 0, 100));
-    const chili = await produceId(1);
+    const crop = await grow(alice, 0, 100);
+    await items.connect(alice).claimHarvest(crop);
+    const chili = await produceId(1, crop);
     const before = await items.pointsOf(alice);
     for (let i = 0; i < 4; i++) await items.connect(alice).makeOffer({ giveIds: [chili], giveAmts: [1], wantIds: [2n * KIND], wantAmts: [1] }, ethers.ZeroAddress, 1);
     const split = before - (await items.pointsOf(alice));
@@ -202,14 +205,15 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
   it("private offers, cancel by the maker, and anyone closing an expired offer returns the escrow", async () => {
     const { alice, bob, carol, game, items, produceId } = await deploy();
     await game.connect(bob).plant(1, usdc(10)); // crop 1: mango
-    await game.connect(alice).plant(0, usdc(100)); // crop 2: chili x5
-    await time.increase(30 * DAY + 1);
+    await time.increase(23 * DAY);
+    await game.connect(alice).plant(0, usdc(100)); // crop 2: chili x5, ripe the same day
+    await time.increase(7 * DAY + 1);
     await game.connect(bob).harvest(1);
     await game.connect(alice).harvest(2);
     await items.connect(bob).claimHarvest(1);
     await items.connect(alice).claimHarvest(2);
-    const chili = await produceId(1);
-    const mango = await produceId(2);
+    const chili = await produceId(1, 2n);
+    const mango = await produceId(2, 1n);
     await items.connect(alice).makeOffer({ giveIds: [chili], giveAmts: [2], wantIds: [2n * KIND], wantAmts: [1] }, bob.address, 1);
     await expect(items.connect(carol).acceptOffer(0, [mango])).to.be.revertedWithCustomError(items, "NotForYou");
     await expect(items.connect(carol).cancelOffer(0)).to.be.revertedWithCustomError(items, "NotForYou");
@@ -224,13 +228,16 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
 
   it("Mâm ngũ quả is crafted from fresh produce only", async () => {
     const { alice, items, grow, produceId } = await deploy();
-    await items.connect(alice).claimHarvest(await grow(alice, 0, 10)); // 3 chili
-    const chili = await produceId(1);
-    await items.connect(alice).claimHarvest(await grow(alice, 1, 10)); // 2 mango
-    const mango = await produceId(2);
+    const c1 = await grow(alice, 0, 10);
+    await items.connect(alice).claimHarvest(c1); // 3 chili
+    const chili = await produceId(1, c1);
+    const c2 = await grow(alice, 1, 10);
+    await items.connect(alice).claimHarvest(c2); // 2 mango
+    const mango = await produceId(2, c2);
     await expect(items.connect(alice).craftFruitTray(chili, mango, 3n * KIND)).to.be.revertedWithCustomError(items, "Spoiled");
-    await items.connect(alice).claimHarvest(await grow(alice, 2, 10)); // durian, 90 days later: chili and mango spoiled
-    const durian = await produceId(3);
+    const c3 = await grow(alice, 2, 10);
+    await items.connect(alice).claimHarvest(c3); // durian, 90 days later: chili and mango spoiled
+    const durian = await produceId(3, c3);
     await expect(items.connect(alice).craftFruitTray(chili, mango, durian)).to.be.revertedWithCustomError(items, "Spoiled");
   });
 
@@ -254,6 +261,47 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     // chili/durian are now 23 days old: spoiled. Mango is fresh. Proves freshness is per batch.
     expect(await items.isFresh(1n * KIND + day)).to.equal(false);
     expect(await items.isFresh(2n * KIND + (await game.today()))).to.equal(true);
+  });
+
+  it("produce is dated by the day the crop ripened, so claiming late does not keep it fresh", async () => {
+    const { alice, game, items } = await deploy();
+    await game.connect(alice).plant(0, usdc(10));
+    const [ids] = await game.cropsOf(alice);
+    await time.increase(7 * DAY + 1);
+    await game.connect(alice).harvest(ids[0]);
+    await time.increase(300 * DAY); // hoard: claim 300 days later
+    await items.connect(alice).claimHarvest(ids[0]);
+    const id = 1n * KIND + (await game.readyAt(ids[0])) / BigInt(DAY);
+    expect(await items.balanceOf(alice, id)).to.equal(3n);
+    expect(await items.isFresh(id)).to.equal(false);
+  });
+
+  it("time badges need the position kept: leaving the pond or touching the loan restarts the clock", async () => {
+    const { alice, coop, pond, items } = await deploy();
+    // Ao cá: in, start, out at once, back in a tiny amount later -> no badge
+    await pond.connect(alice).zapIn(usdc(50), 1);
+    await items.connect(alice).startWatch(1003);
+    await pond.connect(alice).zapOut(await pond.sharesOf(alice), 0);
+    await time.increase(3 * DAY);
+    await pond.connect(alice).zapIn(usdc(1), 1);
+    expect(await items.canEarn(alice, 1003, 0)).to.equal(false);
+    // a missed check-in restarts the clock
+    await items.connect(alice).startWatch(1003); // clock restarts today (gap + fewer shares)
+    await time.increase(3 * DAY); // no check-ins in between
+    expect(await items.canEarn(alice, 1003, 0)).to.equal(false);
+    // Hợp tác xã: borrow, start, repay everything, borrow 1 unit again later -> no badge
+    await coop.connect(alice).depositCollateral(avax(10));
+    await coop.connect(alice).borrow(usdc(20));
+    await items.connect(alice).startWatch(1004);
+    await coop.connect(alice).repay(alice.address, usdc(1_000));
+    await time.increase(3 * DAY);
+    await coop.connect(alice).borrow(1);
+    expect(await items.canEarn(alice, 1004, 0)).to.equal(false);
+    await expect(items.connect(alice).claimBadge(1004, 0)).to.be.revertedWithCustomError(items, "NotEligible");
+    // starting again on the new loan and leaving it alone for 3 days works
+    await items.connect(alice).startWatch(1004);
+    await time.increase(3 * DAY);
+    await items.connect(alice).claimBadge(1004, 0);
   });
 
   it("season trophies: owner only, at most 10 per season, once per player", async () => {

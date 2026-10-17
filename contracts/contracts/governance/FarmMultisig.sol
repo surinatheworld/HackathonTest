@@ -5,6 +5,8 @@ pragma solidity ^0.8.24;
 /// yield source, FarmCoop's lending pool and price feed, FarmQuests' reward pool, FarmItems' admin), so no single
 /// teammate can move those funds or change those settings alone.
 /// Flow: one owner submits a call (and confirms it), a second owner confirms, then any owner executes it.
+/// Confirmations are counted at execute time and only from current owners: after a lost or stolen key is
+/// replaced, everything that key confirmed stops counting, so it can never be one of the two signatures.
 /// Deliberately small so it can be read in one sitting; on mainnet the team would use Safe instead.
 contract FarmMultisig {
     struct Call {
@@ -12,14 +14,17 @@ contract FarmMultisig {
         uint256 value;
         bytes data;
         bool executed;
-        uint256 confirmations;
     }
 
     address[] private _owners;
     mapping(address => bool) public isOwner;
+    /// Bumped each time an address becomes an owner, so confirmations from an earlier term never come back.
+    mapping(address => uint256) private _term;
+    uint256 private _terms;
     uint256 public immutable threshold;
     Call[] private _calls;
-    mapping(uint256 => mapping(address => bool)) public confirmedBy;
+    /// call id => owner => the owner's term when they confirmed (0 = not confirmed)
+    mapping(uint256 => mapping(address => uint256)) private _confirmedIn;
 
     event Submitted(uint256 indexed id, address indexed owner, address indexed to, uint256 value, bytes data);
     event Confirmed(uint256 indexed id, address indexed owner);
@@ -43,7 +48,7 @@ contract FarmMultisig {
         for (uint256 i; i < owners_.length; i++) {
             address o = owners_[i];
             if (o == address(0) || isOwner[o]) revert BadSetup();
-            isOwner[o] = true;
+            _addOwner(o);
             _owners.push(o);
         }
         threshold = threshold_;
@@ -67,7 +72,7 @@ contract FarmMultisig {
     /// Proposes a call and counts the proposer's confirmation.
     function submit(address to, uint256 value, bytes calldata data) external onlyOwner returns (uint256 id) {
         id = _calls.length;
-        _calls.push(Call(to, value, data, false, 0));
+        _calls.push(Call(to, value, data, false));
         emit Submitted(id, msg.sender, to, value, data);
         _confirm(id);
     }
@@ -77,15 +82,15 @@ contract FarmMultisig {
     }
 
     function revoke(uint256 id) external onlyOwner pending(id) {
-        if (!confirmedBy[id][msg.sender]) revert NotConfirmed(id);
-        confirmedBy[id][msg.sender] = false;
-        _calls[id].confirmations--;
+        if (!confirmedBy(id, msg.sender)) revert NotConfirmed(id);
+        _confirmedIn[id][msg.sender] = 0;
         emit Revoked(id, msg.sender);
     }
 
     function execute(uint256 id) external onlyOwner pending(id) {
+        uint256 have = confirmations(id);
+        if (have < threshold) revert NotEnoughConfirmations(have, threshold);
         Call storage c = _calls[id];
-        if (c.confirmations < threshold) revert NotEnoughConfirmations(c.confirmations, threshold);
         c.executed = true;
         emit Executed(id);
         (bool ok, bytes memory reason) = c.to.call{value: c.value}(c.data);
@@ -98,7 +103,8 @@ contract FarmMultisig {
         if (!isOwner[oldOwner] || newOwner == address(0) || isOwner[newOwner]) revert BadSetup();
         for (uint256 i; i < _owners.length; i++) if (_owners[i] == oldOwner) _owners[i] = newOwner;
         isOwner[oldOwner] = false;
-        isOwner[newOwner] = true;
+        _term[oldOwner] = 0;
+        _addOwner(newOwner);
         emit OwnerReplaced(oldOwner, newOwner);
     }
 
@@ -117,10 +123,26 @@ contract FarmMultisig {
         return _calls[id];
     }
 
+    /// Whether `owner` has a confirmation on call `id` that still counts (current owner, current term).
+    function confirmedBy(uint256 id, address owner) public view returns (bool) {
+        uint256 t = _confirmedIn[id][owner];
+        return t != 0 && isOwner[owner] && t == _term[owner];
+    }
+
+    /// Confirmations on call `id` from the current owners only.
+    function confirmations(uint256 id) public view returns (uint256 n) {
+        uint256 len = _owners.length;
+        for (uint256 i; i < len; i++) if (confirmedBy(id, _owners[i])) n++;
+    }
+
+    function _addOwner(address o) private {
+        isOwner[o] = true;
+        _term[o] = ++_terms;
+    }
+
     function _confirm(uint256 id) private {
-        if (confirmedBy[id][msg.sender]) revert AlreadyConfirmed(id);
-        confirmedBy[id][msg.sender] = true;
-        _calls[id].confirmations++;
+        if (confirmedBy(id, msg.sender)) revert AlreadyConfirmed(id);
+        _confirmedIn[id][msg.sender] = _term[msg.sender];
         emit Confirmed(id, msg.sender);
     }
 }

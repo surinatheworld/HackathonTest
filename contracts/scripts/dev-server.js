@@ -94,7 +94,14 @@ async function main() {
         return res.end(JSON.stringify({ error: e.message }));
       }
       // Serve only the game: index.html and prototype/. Never the rest of the repo (contracts/.env).
-      const rel = url.pathname === "/" ? "index.html" : path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "");
+      let decoded;
+      try {
+        decoded = decodeURIComponent(url.pathname);
+      } catch {
+        res.writeHead(400);
+        return res.end("Bad request"); // e.g. GET /% must not crash the server
+      }
+      const rel = url.pathname === "/" ? "index.html" : path.normalize(decoded).replace(/^([/\\])+/, "");
       const file = path.join(WEB, rel);
       const allowed = rel === "index.html" || file.startsWith(path.join(WEB, "prototype") + path.sep);
       if (!allowed || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
@@ -104,7 +111,8 @@ async function main() {
       res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-store" });
       fs.createReadStream(file).pipe(res);
     })
-    .listen(PORT, () => console.log(`Game: http://localhost:${PORT}`));
+    // This machine only: the dev server holds a funded local relayer key.
+    .listen(PORT, "127.0.0.1", () => console.log(`Game: http://localhost:${PORT}`));
 }
 
 const stop = () => {

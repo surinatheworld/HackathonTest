@@ -19,6 +19,10 @@ interface IQuestGame {
         uint256 payout;
     }
     function cropsOf(address who) external view returns (uint256[] memory ids, Crop[] memory list);
+    function crops(uint256 id)
+        external
+        view
+        returns (address owner, uint8 tier, uint8 status, uint64 plantedAt, uint64 lastWateredDay, uint256 amount, uint256 payout);
     function farmers(address who)
         external
         view
@@ -35,20 +39,9 @@ interface IQuestPond {
 }
 
 interface IQuestItems {
-    struct Offer {
-        address maker;
-        address taker;
-        uint64 expires;
-        bool open;
-        uint256[] giveIds;
-        uint256[] giveAmts;
-        uint256[] wantIds;
-        uint256[] wantAmts;
-    }
     function balanceOf(address account, uint256 id) external view returns (uint256);
-    function itemsOf(address user) external view returns (uint256[] memory ids, uint256[] memory amounts);
-    function offerCount() external view returns (uint256);
-    function offer(uint256 offerId) external view returns (Offer memory);
+    function gotProduce(address user) external view returns (bool);
+    function offersMade(address user) external view returns (uint256);
 }
 
 /// Nhiệm vụ: 18 quests in 5 chapters, easy to hard, unlocked one at a time. Each one is checked on-chain from the
@@ -59,8 +52,6 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant COUNT = 18;
-    uint256 private constant KIND = 1e9;
-    uint256 private constant OFFER_SCAN = 100;
 
     IQuestGame public immutable game;
     IQuestCoop public immutable coop;
@@ -95,24 +86,26 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
         return q < COUNT ? uint256(r[q]) * 1e6 : 0;
     }
 
-    /// Whether `u` has done quest `q` right now (quests are still claimed in order).
-    function check(address u, uint256 q) public view returns (bool) {
+    /// Whether `u` has done quest `q` right now (quests are still claimed in order). Every check costs the same
+    /// gas however long the player has played: quests 2 and 4 look only at the crop `hint` names (find one with
+    /// hintFor), the others read a single value.
+    function check(address u, uint256 q, uint256 hint) public view returns (bool) {
         // Chương 1: Làm quen
         if (q == 0) return usdc.balanceOf(u) > 0; // Nhận tiền thử
         if (q == 1) return _lent(u) >= 10e6; // Gieo hạt ở Ruộng rau
-        if (q == 2) return _cropCount(u) > 0; // Trồng cây đầu tiên
+        if (q == 2) return _ownCrop(u, hint, false); // Trồng cây đầu tiên
         if (q == 3) return _streak(u) >= 1; // Tưới cây
         // Chương 2: Chăm vườn
-        if (q == 4) return _harvested(u, 255); // Thu hoạch một cây
+        if (q == 4) return _ownCrop(u, hint, true); // Thu hoạch một cây
         if (q == 5) return _points(u) >= 10; // Có 10 điểm mùa
-        if (q == 6) return _hasProduce(u); // Nhận nông sản vào Kho đồ
+        if (q == 6) return items.gotProduce(u); // Nhận nông sản vào Kho đồ
         if (q == 7) return _hasCosmetic(u); // Mua đồ trang trí
         // Chương 3: Tài chính
         if (q == 8) return pond.sharesOf(u) > 0; // Thả cá ở Ao cá
         if (q == 9) return coop.debtOf(u) > 0; // Vay ở Hợp tác xã
         if (q == 10) return coop.debtOf(u) == 0; // Trả hết nợ (only reachable after quest 9)
         // Chương 4: Làng xóm
-        if (q == 11) return _madeOffer(u); // Đăng một đề nghị đổi đồ
+        if (q == 11) return items.offersMade(u) > 0; // Đăng một đề nghị đổi đồ
         if (q == 12) return _stole(u); // Hái trộm vườn hàng xóm
         if (q == 13) return _guarded(u); // Thuê người giữ vườn
         // Chương 5: Bậc thầy
@@ -123,12 +116,12 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
         return false;
     }
 
-    /// Complete the current quest and take its reward.
-    function complete() external nonReentrant returns (uint256 quest, uint256 reward) {
+    /// Complete the current quest and take its reward. `hint` is a crop id for quests 2 and 4 (see hintFor), else 0.
+    function complete(uint256 hint) external nonReentrant returns (uint256 quest, uint256 reward) {
         address u = _msgSender();
         quest = progress[u];
         if (quest >= COUNT) revert AllDone();
-        if (!check(u, quest)) revert NotDoneYet(quest);
+        if (!check(u, quest, hint)) revert NotDoneYet(quest);
         reward = rewardOf(quest);
         uint256 pool = usdc.balanceOf(address(this));
         if (pool < reward) revert RewardPoolEmpty(pool, reward);
@@ -152,9 +145,22 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     function status(address u) external view returns (uint256 quest, bool ready, uint256 reward) {
         quest = progress[u];
         if (quest < COUNT) {
-            ready = check(u, quest);
+            (ready,) = hintFor(u, quest);
             reward = rewardOf(quest);
         }
+    }
+
+    /// For the UI only (eth_call, no gas limit that matters): finds the hint complete() needs. It scans the
+    /// player's crops, which is why complete() itself never does.
+    function hintFor(address u, uint256 q) public view returns (bool ready, uint256 hint) {
+        if (q == 2 || q == 4) {
+            (uint256[] memory ids, IQuestGame.Crop[] memory list) = game.cropsOf(u);
+            for (uint256 i; i < ids.length; i++) {
+                if (q == 2 || list[i].status == 2) return (true, ids[i]);
+            }
+            return (false, 0);
+        }
+        return (check(u, q, 0), 0);
     }
 
     function _msgSender() internal view override(Context, ERC2771Context) returns (address) {
@@ -200,37 +206,14 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
         (,,, g) = _farmer(u);
     }
 
-    function _cropCount(address u) private view returns (uint256) {
-        (uint256[] memory ids,) = game.cropsOf(u);
-        return ids.length;
-    }
-
-    /// tier 255 = any tier
-    function _harvested(address u, uint8 tier) private view returns (bool) {
-        (, IQuestGame.Crop[] memory list) = game.cropsOf(u);
-        for (uint256 i; i < list.length; i++) if (list[i].status == 2 && (tier == 255 || list[i].tier == tier)) return true;
-        return false;
-    }
-
-    function _hasProduce(address u) private view returns (bool) {
-        (uint256[] memory ids,) = items.itemsOf(u);
-        for (uint256 i; i < ids.length; i++) {
-            uint256 k = ids[i] / KIND;
-            if (k >= 1 && k <= 3) return true;
-        }
-        return false;
+    /// The crop exists and is `u`'s (and, if `harvested`, was harvested).
+    function _ownCrop(address u, uint256 cropId, bool harvested) private view returns (bool) {
+        (address o,, uint8 st,,,,) = game.crops(cropId);
+        return o == u && (!harvested || st == 2);
     }
 
     function _hasCosmetic(address u) private view returns (bool) {
         for (uint256 id = 2001; id <= 2006; id++) if (items.balanceOf(u, id) > 0) return true;
-        return false;
-    }
-
-    /// Looks at the latest OFFER_SCAN market offers for one made by `u`.
-    function _madeOffer(address u) private view returns (bool) {
-        uint256 n = items.offerCount();
-        uint256 stop = n > OFFER_SCAN ? n - OFFER_SCAN : 0;
-        for (uint256 i = n; i > stop; i--) if (items.offer(i - 1).maker == u) return true;
         return false;
     }
 }

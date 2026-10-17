@@ -135,6 +135,45 @@ describe("Hợp tác xã (FarmCoop): collateral, borrow, liquidation", () => {
 });
 
 describe("Ao cá (FarmPond): x·y=k pool", () => {
+  // Same integer math as prototype/chain.js (CH.pondAdd / CH.pondOut), so the UI's slippage limits are exact.
+  const isqrt = (n) => { if (n < 2n) return n; let x = n, y = (x + 1n) / 2n; while (y < x) { x = y; y = (x + n / x) / 2n; } return x; };
+  const swapOut = (a, rIn, rOut) => { const f = a * 9_970n; return (f * rOut) / (rIn * 10_000n + f); };
+  const previewIn = async (pond, amount) => {
+    const [ru, ra, ts] = [await pond.reserveUsdc(), await pond.reserveAvax(), await pond.totalShares()];
+    const swapIn = (isqrt(ru * (ru * 3_988_009n + amount * 3_988_000n)) - ru * 1_997n) / 1_994n;
+    const avaxOut = swapOut(swapIn, ru, ra);
+    const x = ((amount - swapIn) * ts) / (ru + swapIn), y = (avaxOut * ts) / (ra - avaxOut);
+    return x < y ? x : y;
+  };
+  const previewOut = async (pond, shares) => {
+    const [ru, ra, ts] = [await pond.reserveUsdc(), await pond.reserveAvax(), await pond.totalShares()];
+    const up = (ru * shares) / ts, ap = (ra * shares) / ts;
+    return up + swapOut(ap, ra - ap, ru - up);
+  };
+
+  it("the UI's zap previews match the contract exactly, so a sandwich makes the zap revert", async () => {
+    const { owner, token, pond } = await deploy();
+    const bob = (await ethers.getSigners())[9];
+    await token.mint(owner, usdc(100_000));
+    await token.approve(pond, ethers.MaxUint256);
+    const big = usdc(20_000);
+    const expected = await previewIn(pond, big);
+    await pond.zapIn(big, expected); // exact: would revert if the preview were 1 share too high
+    expect(await pond.sharesOf(owner)).to.be.gte(expected);
+    // a large holder can exit in full with the exact preview as the minimum
+    const shares = await pond.sharesOf(owner);
+    const out = await previewOut(pond, shares);
+    const before = await token.balanceOf(owner);
+    await pond.zapOut(shares, out);
+    expect((await token.balanceOf(owner)) - before).to.equal(out);
+    // a front-run swap moves the price; the zap with the UI's 1% limit now reverts instead of losing ~half
+    const min = ((await previewIn(pond, usdc(1_000))) * 99n) / 100n;
+    await token.mint(bob, usdc(30_000));
+    await token.connect(bob).approve(pond, ethers.MaxUint256);
+    await pond.connect(bob).swap(true, usdc(20_000), 0);
+    await expect(pond.zapIn(usdc(1_000), min)).to.be.revertedWithCustomError(pond, "Slippage");
+  });
+
   it("zapIn with USDC only, then zapOut back to USDC, loses only the swap fees", async () => {
     const { alice, token, pond, relay, fundPlayer } = await deploy();
     await fundPlayer(alice);
@@ -234,6 +273,27 @@ describe("FarmGame hardening and real yield", () => {
     await relay(alice, game, "withdraw", [usdc(1_000)]);
     expect((await token.balanceOf(alice.address)) - before).to.equal(usdc(1_000));
     expect(await game.invested()).to.be.lt(idle);
+  });
+
+  it("switching yield sources pulls interest left in the old one into the reward pool", async () => {
+    const { owner, token, game } = await deploy();
+    const F = await ethers.getContractFactory("MockYieldSource");
+    const oldSrc = await F.deploy(token, game, 500, DAY);
+    await game.connect(owner).setYieldSource(oldSrc);
+    await token.mint(owner, usdc(1_000));
+    await token.connect(owner).transfer(oldSrc, usdc(1_000));
+    const idle = await token.balanceOf(game);
+    await game.connect(owner).invest(idle);
+    await time.increase(30 * DAY);
+    await game.harvestYield();
+    await time.increase(30 * DAY); // interest keeps accruing between the harvest and the divest
+    await game.connect(owner).divest(await game.invested());
+    const left = await oldSrc.balance();
+    expect(left).to.be.gt(0n);
+    const reserve0 = await game.rewardReserve();
+    await game.connect(owner).setYieldSource(await F.deploy(token, game, 500, DAY));
+    expect(await oldSrc.balance()).to.equal(0n);
+    expect(await game.rewardReserve()).to.be.gte(reserve0 + left);
   });
 
   it("the testnet yield source never mints: interest stops when its reserve runs out, principal stays whole", async () => {

@@ -37,9 +37,13 @@ async function main() {
     const now = await game.invested();
     console.log(`
 Phần còn lại cần ví owner ${await game.owner()}. Trên Snowtrace mở FarmGame ${d.game} → Contract → Write Contract, kết nối ví owner rồi gọi lần lượt:`);
-    if (now > 0n) console.log(`  1. divest(${now})`);
-    console.log(`  ${now > 0n ? 2 : 1}. setYieldSource(${src.target})`);
-    console.log(`  ${now > 0n ? 3 : 2}. invest(${amount})`);
+    // harvestYield right before divest: interest earned in between would otherwise stay in the old source
+    // (the live FarmGame predates the fix that sweeps it on setYieldSource).
+    const steps = [];
+    if (now > 0n) steps.push("harvestYield()", `divest(${now})`);
+    steps.push(`setYieldSource(${src.target})`, `invest(${amount})`);
+    steps.forEach((t, i) => console.log(`  ${i + 1}. ${t}`));
+    console.log("Làm liền tay các bước trên, nhất là harvestYield ngay trước divest.");
     console.log("Xong thì chạy lại lệnh này để ghi địa chỉ mới vào deployments.");
     if ((await game.yieldSource()).toLowerCase() !== src.target.toLowerCase()) return;
   } else {

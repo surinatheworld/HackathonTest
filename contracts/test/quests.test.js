@@ -55,12 +55,13 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
       expect(cur).to.equal(BigInt(q));
       expect(ready, `quest ${q} should be ready`).to.equal(true);
       const before = await token.balanceOf(alice);
-      await quests.connect(alice).complete();
+      const [, hint] = await quests.hintFor(alice, q);
+      await quests.connect(alice).complete(hint);
       expect((await token.balanceOf(alice)) - before).to.equal(reward);
       paid += reward;
     };
     const notYet = async (q) => {
-      await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(q);
+      await expect(quests.connect(alice).complete(0)).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(q);
     };
 
     // Chương 1: Làm quen
@@ -123,21 +124,21 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     await coop.connect(alice).borrow(usdc(20)); // health 3.75 >= 1.5
     await items.connect(alice).startWatch(1004);
     await items.connect(alice).startWatch(1003);
-    await time.increase(3 * DAY);
+    for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); } // Ao cá check-ins
     await items.connect(alice).claimBadge(1004, 0);
+    await items.connect(alice).claimBadge(1003, 0);
     await done(15);
     await time.increase(90 * DAY);
     await game.connect(alice).harvest(1);
     await items.connect(alice).claimBadge(1002, 1);
     await done(16);
     await items.connect(alice).claimBadge(1001, 0);
-    await items.connect(alice).claimBadge(1003, 0);
     await items.connect(alice).claimBadge(1006, 0);
     await done(17);
 
     expect(await quests.progress(alice)).to.equal(18n);
     expect(paid).to.equal(usdc(760));
-    await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "AllDone");
+    await expect(quests.connect(alice).complete(0)).to.be.revertedWithCustomError(quests, "AllDone");
     const [q, ready, reward] = await quests.status(alice);
     expect([q, ready, reward]).to.deep.equal([18n, false, 0n]);
   });
@@ -147,9 +148,9 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     await token.connect(alice).faucet();
     await token.connect(alice).approve(game, ethers.MaxUint256);
     await game.connect(alice).plant(0, usdc(10)); // quest 2's condition, before quest 1
-    await quests.connect(alice).complete(); // quest 0
-    await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(1);
-    expect(await quests.check(alice, 2)).to.equal(true);
+    await quests.connect(alice).complete(0); // quest 0
+    await expect(quests.connect(alice).complete(0)).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(1);
+    expect((await quests.hintFor(alice, 2))[0]).to.equal(true);
     expect(await quests.progress(alice)).to.equal(1n);
   });
 
@@ -157,7 +158,7 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     const { owner, alice, token, quests } = await deploy();
     await token.connect(alice).faucet();
     const supply = await token.totalSupply();
-    await quests.connect(alice).complete();
+    await quests.connect(alice).complete(0);
     expect(await token.totalSupply()).to.equal(supply);
     expect(await quests.rewardPool()).to.equal(usdc(4_990));
     await expect(quests.connect(alice).withdrawPool(alice, 1)).to.be.revertedWithCustomError(quests, "OwnableUnauthorizedAccount");
@@ -165,18 +166,35 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     const game = await ethers.getContractAt("FarmGame", await quests.game());
     await token.connect(alice).approve(game, ethers.MaxUint256);
     await game.connect(alice).deposit(usdc(10));
-    await expect(quests.connect(alice).complete()).to.be.revertedWithCustomError(quests, "RewardPoolEmpty").withArgs(0, usdc(10));
+    await expect(quests.connect(alice).complete(0)).to.be.revertedWithCustomError(quests, "RewardPoolEmpty").withArgs(0, usdc(10));
     expect(await quests.progress(alice)).to.equal(1n);
     await token.transfer(quests, usdc(10));
-    await quests.connect(alice).complete();
+    await quests.connect(alice).complete(0);
     expect(await quests.progress(alice)).to.equal(2n);
+  });
+
+  it("claiming costs the same gas however long the player has played (no history scans)", async () => {
+    const { alice, token, game, quests } = await deploy();
+    await token.connect(alice).faucet();
+    await token.connect(alice).approve(game, ethers.MaxUint256);
+    await quests.connect(alice).complete(0); // quest 0
+    await game.connect(alice).deposit(usdc(10));
+    await quests.connect(alice).complete(0); // quest 1
+    for (let i = 0; i < 80; i++) { await game.connect(alice).plant(0, usdc(1)); await game.connect(alice).uproot(i + 1); }
+    const [ready, hint] = await quests.hintFor(alice, 2);
+    expect(ready).to.equal(true);
+    const gas = await quests.connect(alice).complete.estimateGas(hint);
+    expect(gas, "under the 300k the game sends").to.be.lt(150_000n);
+    await expect(quests.connect(alice).complete(9999)).to.be.revertedWithCustomError(quests, "NotDoneYet").withArgs(2);
+    await quests.connect(alice).complete(hint, { gasLimit: 300_000 });
+    expect(await quests.progress(alice)).to.equal(3n);
   });
 
   it("works gasless for a wallet with no AVAX", async () => {
     const { token, quests, relay } = await deploy();
     const zero = ethers.Wallet.createRandom().connect(ethers.provider);
     await relay(zero, token, "faucet", []);
-    await relay(zero, quests, "complete", []);
+    await relay(zero, quests, "complete", [0]);
     expect(await quests.progress(zero.address)).to.equal(1n);
     expect(await token.balanceOf(zero.address)).to.equal(usdc(1_010));
     expect(await ethers.provider.getBalance(zero.address)).to.equal(0n);

@@ -14,9 +14,12 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc", 43113);
   const funder = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
   console.log(`Ví nạp: ${funder.address} (${ethers.formatEther(await provider.getBalance(funder.address))} AVAX)`);
+  if (status.pool.some((w) => w.address.toLowerCase() === funder.address.toLowerCase()))
+    console.log("Lưu ý: ví nạp cũng là ví trả gas #0. Giữ nó trên 0,01 AVAX, dưới mức đó fee manager bỏ qua nó.");
   for (const [i, w] of status.pool.entries()) {
     const bal = await provider.getBalance(w.address);
-    const need = i === 0 ? 0n : TARGET - bal;
+    // Every pool wallet is topped up, the first one too, unless it is the funding wallet itself.
+    const need = w.address.toLowerCase() === funder.address.toLowerCase() ? 0n : TARGET - bal;
     console.log(`#${i} ${w.address}  ${ethers.formatEther(bal)} AVAX${need > 0n ? `  → nạp ${ethers.formatEther(need)}` : ""}`);
     if (need <= 0n || process.env.DRY) continue;
     const tx = await funder.sendTransaction({ to: w.address, value: need });
