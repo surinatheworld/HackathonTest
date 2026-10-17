@@ -187,19 +187,29 @@ export async function relay(body, env, config) {
   } catch (e) {
     return json(422, { error: "Giao dịch sẽ thất bại: " + explain(e) });
   }
-  // One relayer wallet serves every player, so two requests at the same moment can pick the same nonce. On a
-  // nonce clash, wait a little and retry with the next pending nonce instead of failing the player.
-  let tx;
-  for (let attempt = 0; ; attempt++) {
+  // One relayer wallet serves every player and the public Fuji RPC does not show pending transactions, so
+  // requests arriving together can pick the same nonce: the node keeps one and silently drops the others.
+  // So only answer once the transaction is mined (Fuji: ~2 s). If it was dropped, the forwarder still accepts
+  // the request (verify() is true until it runs), and it is sent again with a fresh nonce. It can never run twice.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let lastError = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt) await sleep(200 + Math.random() * 700);
+    let tx;
     try {
-      const nonce = await provider.getTransactionCount(wallet.address, "pending");
-      tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n, nonce: nonce + (attempt > 2 ? attempt - 2 : 0) });
-      break;
+      const nonce = await provider.getTransactionCount(wallet.address, "latest");
+      tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n, nonce });
     } catch (e) {
+      lastError = e;
       const m = String(e?.shortMessage || e?.message || e);
-      if (attempt >= 5 || !/nonce|replacement|already known|underpriced/i.test(m)) throw e;
-      await new Promise((r) => setTimeout(r, 250 + Math.random() * 600));
+      if (/nonce|replacement|already known|underpriced/i.test(m)) continue;
+      throw e;
     }
+    const rc = await provider.waitForTransaction(tx.hash, 1, 12_000).catch(() => null);
+    if (rc) return json(200, { hash: tx.hash, relayer: wallet.address, status: rc.status });
+    // not mined in time: either dropped, or still waiting
+    if (!(await fwd.verify(req).catch(() => true))) return json(200, { hash: tx.hash, relayer: wallet.address });
   }
-  return json(200, { hash: tx.hash, relayer: wallet.address });
+  console.warn("[relay] gave up", lastError?.shortMessage || lastError?.message || "not mined");
+  return json(503, { error: "Fee manager đang bận, thử lại sau vài giây." });
 }

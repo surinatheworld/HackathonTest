@@ -241,7 +241,8 @@
       usdcR.balanceOf(a), rp.getBalance(a), gameR.lends(a), gameR.pendingYield(a), gameR.rewardReserve(),
       gameR.cropsOf(a), gameR.farmers(a), gameR.today(),
     ]);
-    CH.data = {
+    // Build the whole snapshot first and swap it in at the end, so the UI never sees a half-read state.
+    const next = {
       usdc: toNum(usdc),
       avax: Number(E.formatEther(avax)),
       lendPrincipal: toNum(lend.principal),
@@ -258,8 +259,10 @@
       }),
     };
     const [coop, pond, gavax] = await Promise.all([readCoop(a), readPond(a), avaxR ? avaxR.balanceOf(a) : 0n]);
-    Object.assign(CH.data, { coop, pond, gavax: toAvax(gavax) });
-    CH.data.items = await readItems(a, CH.data.crops).catch((e) => { console.error("[items]", e); return CH.data.items || null; });
+    Object.assign(next, { coop, pond, gavax: toAvax(gavax) });
+    next.items = await readItems(a, next.crops).catch((e) => { console.error("[items]", e); return CH.data?.items || null; });
+    if (CH.account !== a) return; // the wallet changed while reading
+    CH.data = next;
     emit();
   };
 
