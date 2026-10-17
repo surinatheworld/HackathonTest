@@ -415,6 +415,7 @@
     if (CH.walletKind === "metamask") await switchToFuji();
     const signature = await signer.signTypedData(domain, TYPES, req);
     const body = { request: { from, to: target, value: "0", gas: String(gas), deadline, data, signature } };
+    sentAt = performance.now();
     const r = await fetch(relayUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -423,6 +424,25 @@
       throw err;
     }
     return j.hash;
+  }
+
+  // ---------- per-player gas stats: how fast each transaction confirmed and what the fee manager paid ----------
+  let sentAt = 0;
+  const statsKey = () => `farm-gas-v1:${CH.account}`;
+  CH.gasStats = () => {
+    try { return JSON.parse(localStorage.getItem(statsKey())) || { count: 0, avax: 0, ms: 0 }; } catch { return { count: 0, avax: 0, ms: 0 }; }
+  };
+  let avaxUsd = 0;
+  CH.avaxUsd = () => avaxUsd || CH.data?.coop?.price || 0;
+  async function recordTx(rc, path, ms) {
+    const avax = Number(E.formatEther((rc.gasUsed || 0n) * (rc.gasPrice || 0n)));
+    CH.lastTx = { ...CH.lastTx, ms, avax, path };
+    if (path === "gasless") {
+      const st = CH.gasStats();
+      st.count++; st.avax += avax; st.ms += ms;
+      try { localStorage.setItem(statsKey(), JSON.stringify(st)); } catch {}
+    }
+    if (!avaxUsd && coopR) avaxUsd = Number(E.formatUnits(await coopR.price().catch(() => 0n), 8));
   }
 
   async function exec(label, target, iface, fn, args, gas) {
@@ -438,6 +458,7 @@
         // Fee manager not configured yet: MetaMask users can still pay their own gas.
         if (e.relayStatus === 503 && CH.walletKind === "metamask") {
           await switchToFuji();
+          sentAt = performance.now();
           const tx = await signer.sendTransaction({ to: target, data, gasLimit: gas });
           hash = tx.hash;
           CH.lastPath = "self-paid";
@@ -447,6 +468,7 @@
       emit();
       const rc = await rp.waitForTransaction(hash, 1, 120_000);
       if (!rc || rc.status !== 1) throw new Error("Giao dịch thất bại trên chain: " + hash);
+      await recordTx(rc, CH.lastPath, Math.round(performance.now() - sentAt)).catch(() => {});
       return rc;
     } finally {
       CH.busy = null;

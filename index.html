@@ -303,6 +303,9 @@ const st={
 {let p=st.price;for(let i=40;i>=0;i--){st.hist.unshift({d:st.day-i*0.05,p});p*=1+(Math.sin(i*1.7)*0.004)}}
 
 const nf=(n,d=2)=>Number(n).toLocaleString('vi-VN',{minimumFractionDigits:d,maximumFractionDigits:d});
+/** Tiny amounts (Fuji gas costs millionths of a dollar) keep two significant digits instead of rounding to 0. */
+const tiny=(n)=>!n?'0':n>=0.01?nf(n,2):Number(n).toLocaleString('vi-VN',{maximumSignificantDigits:2});
+const secs=(ms)=>nf(ms/1000,1)+' giây';
 const usd=(n,d=2)=>nf(n,d)+' USDC';
 const lockSum=()=>st.locks.reduce((s,l)=>s+l.amt,0);
 const lockAcc=l=>l.amt*l.apy*Math.max(0,Math.min(st.day-l.start,l.days))/365;
@@ -551,7 +554,7 @@ const PANELS={
   },
   gate:{
     stats:()=>`<p class="note">Đây là nơi game <b>trả phí giao dịch giúp bạn</b>. Bạn chỉ cần bấm xác nhận, cổng làng gửi giao dịch lên blockchain thay bạn. Tiền vẫn luôn là của bạn.</p>`+
-      (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.pool?CH.relayInfo.pool.filter(w=>w.active).length+' ví (chia theo người chơi)':CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Tổng số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']]):'')+
+      (CH.live?kv([['Phí gas',gasTag()],['Ví trả gas',CH.relayInfo?.pool?CH.relayInfo.pool.filter(w=>w.active).length+' ví (chia theo người chơi)':CH.relayInfo?.relayer?short(CH.relayInfo.relayer):'—'],['Tổng số dư ví trả gas',CH.relayInfo?.balance?nf(Number(CH.relayInfo.balance),3)+' AVAX':'—']].concat(gasStatsRow())):'')+villageGas()+
       `<div class="list">${st.log.slice(-14).reverse().map(l=>`<div class="item" style="grid-template-columns:1fr"><small>Ngày ${nf(l.day%365,1)} · ${chainChip(l.route)}</small><span style="font-size:13px">${esc(l.text)}</span></div>`).join('')||'<p class="note">Chưa có giao dịch nào.</p>'}</div>`,
     actions:()=>''
   },
@@ -587,6 +590,12 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const short=h=>h?h.slice(0,6)+'…'+h.slice(-4):'';
 const busyLine=()=>CH.busy?`<p class="note warn">Đang xử lý: ${esc(CH.busy)}…</p>`:'';
 const liveTag='<span class="pill g">On-chain</span>';
+/** What the fee manager has paid for this wallet so far (kept in this browser). */
+function gasStatsRow(){
+  const st=CH.gasStats?.();if(!st||!st.count)return [];
+  const usd=st.avax*CH.avaxUsd();
+  return [['Được trả gas hộ',`${st.count} giao dịch · ${tiny(st.avax)} AVAX${usd?` (≈ $${tiny(usd)})`:''} · trung bình ${secs(st.ms/st.count)}/giao dịch`]];
+}
 const gasTag=()=>CH.gasless?'<span class="pill g">Miễn phí gas</span>':CH.walletKind==='metamask'?'<span class="pill y">Bạn tự trả gas</span>':'<span class="pill r">Fee manager chưa bật</span>';
 const WALLET_NAME={game:'Ví trong game',privy:'Privy (email / Google)',metamask:'MetaMask / Core'};
 const sig=()=>CH.walletKind==='game'?'Ví trong game tự ký':CH.walletKind==='privy'?'Ví Privy tự ký':'Ký trong MetaMask';
@@ -601,10 +610,10 @@ Object.assign(PANELS,{
           ${CH.hasPrivy?'<button class="tier" data-act="w-privy"><b>Email / Google</b><small>Đăng nhập bằng Privy, ví được tạo sẵn cho bạn</small><em>Dễ nhất</em></button>':''}
           <button class="tier" data-act="w-mm"><b>MetaMask / Core</b><small>${CH.hasMetaMask?'Dùng ví trình duyệt của bạn':'Không thấy ví trình duyệt'}</small></button>
         </div>`;
-      return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',WALLET_NAME[CH.walletKind]||'Ví'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]])+
+      return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',WALLET_NAME[CH.walletKind]||'Ví'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]].concat(gasStatsRow()))+
         `<div class="row"><button class="btn" data-act="w-copy">Sao chép địa chỉ</button>${CH.walletKind==='game'?'<button class="btn" data-act="w-export">Sao lưu khóa ví</button>':''}${CH.walletKind==='privy'?'<button class="btn" data-act="w-privy-export">Xuất khóa ví Privy</button>':''}${CH.walletKind==='metamask'?'<button class="btn" data-act="w-watch">Hiện USDC trong MetaMask</button>':''}<a class="btn" href="${CH.cfg.cchain.explorer}/address/${CH.account}#tokens" target="_blank" rel="noopener">Xem trên Snowtrace</a><button class="btn danger" data-act="w-out">Thoát ví</button></div>`+
         privyPicker()+
-        (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastPath==='gasless'?' · fee manager trả gas':''}</p>`:'');
+        (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastTx.ms?` · xác nhận sau ${secs(CH.lastTx.ms)}`:''}${CH.lastPath==='gasless'?` · fee manager trả ${tiny(CH.lastTx.avax)} AVAX gas`:''}</p>`:'');
     },
     actions:()=>`<p class="note"><b>Muốn xem tiền trong MetaMask?</b> Bấm <b>Xuất khóa ví</b> (hoặc <b>Sao lưu khóa ví</b>) để chép khóa, trong MetaMask chọn <b>Nhập tài khoản</b> rồi dán vào. Sau đó <b>Nhập token</b> với địa chỉ <code>${CH.cfg.cchain.usdc}</code> (USDC, 6 số lẻ). Cách nhanh hơn: bấm <b>Xem trên Snowtrace</b>.</p><p class="note">Ví trong game nằm trên trình duyệt này và chỉ dùng để chơi thử. Đổi máy hoặc xoá dữ liệu trình duyệt là mất ví, nên bấm <b>Sao lưu khóa ví</b>.</p><pre class="term" id="w-key" hidden></pre>`
   }
@@ -650,7 +659,7 @@ const LIVE={
   neighbor:{
     stats:()=>{const d=CH.data;if(!d)return '';const f=d.farmer;
       return kv([['Điểm mùa của bạn',nf(f.points,0)],['Điểm chín chưa gom',nf(f.ripePoints,0)],['Chuỗi ngày tưới',f.streak+' ngày'],['Người giữ vườn',f.guarded?'<span class="pill g">Có</span>':'<span class="pill r">Không</span>']])+busyLine()+
-        `<div class="row"><button class="btn primary" data-act="c-collect">Gom điểm</button><button class="btn" data-act="c-guard" data-arg="${f.guarded?0:1}">${f.guarded?'Bỏ người giữ vườn':'Thuê người giữ vườn'}</button></div>`},
+        `<div class="row"><button class="btn primary" data-act="c-collect">Gom điểm</button><button class="btn" data-act="c-guard" data-arg="${f.guarded?0:1}">${f.guarded?'Bỏ người giữ vườn':'Thuê người giữ vườn'}</button></div>`+villageNeighbors()},
     actions:()=>`<p class="label">Hái trộm vườn bạn bè</p><label class="field" for="steal-addr"><input id="steal-addr" placeholder="0x… địa chỉ ví bạn bè" autocomplete="off" spellcheck="false"></label><div class="row"><button class="btn" data-act="c-steal">Hái trộm 40%</button></div>
       <p class="note">${liveTag} Tưới cây mỗi ngày để được điểm. Điểm chưa gom có thể bị hàng xóm hái mất 40%, nên nhớ bấm <b>Gom điểm</b>. Chỉ mất điểm, không bao giờ mất tiền. Muốn hái trộm thì bạn phải đang trồng ít nhất một cây.</p>`
   }
@@ -751,6 +760,30 @@ function homeDecor(spr,t){
   if(has(2006))spr.push({y:18.6,f:()=>{const x=39.5*T,y=18.4*T;ctx.fillStyle='rgba(0,0,0,.2)';ell(ctx,x+2,y+4,12,3);ctx.fillStyle='#7a4f2c';ctx.fillRect(x-11,y-6,22,4);ctx.fillRect(x-9,y-2,2,6);ctx.fillRect(x+7,y-2,2,6);ctx.fillStyle='#c99a4a';ell(ctx,x,y-8,10,3);
     [['#e2442f',-6,-11],['#f2b33d',-1,-12],['#b5c43c',5,-11],['#86d36f',1,-15],['#e8604a',-4,-15]].forEach(([c,dx,dy])=>{ctx.fillStyle=c;ell(ctx,x+dx,y+dy,3.2,3)})}});
 }
+/* ---------- Cả làng: /api/village, indexed from the Avalanche Data API ---------- */
+let VILLAGE=null,villageAt=0;
+const VILLAGE_ZONES=['gate','neighbor','quests'];
+function loadVillage(){
+  if(!CH.available||Date.now()-villageAt<20000)return;villageAt=Date.now();
+  fetch('/api/village',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(v=>{if(v&&!v.error){VILLAGE=v;if(VILLAGE_ZONES.includes(current))renderStats()}}).catch(()=>{});
+}
+const ago=(t)=>{const s=Date.now()/1000-t;return s<60?'vừa xong':s<3600?Math.floor(s/60)+' phút trước':s<86400?Math.floor(s/3600)+' giờ trước':Math.floor(s/86400)+' ngày trước'};
+const meTag=(a)=>CH.account&&a===CH.account.toLowerCase()?' <span class="pill g">Bạn</span>':'';
+function villageGas(){
+  const v=VILLAGE?.stats;if(!v)return '';
+  const usd=v.gasPaidAvax*(CH.avaxUsd?.()||0);
+  return '<p class="label">Cả làng</p>'+kv([['Giao dịch được trả gas',`${nf(v.sponsoredTxs,0)}${v.sponsoredTxsComplete?'':'+'} · ${nf(v.sponsoredLast24h,0)} trong 24 giờ qua`],['Tổng gas đã trả',`${tiny(v.gasPaidAvax)} AVAX${usd?` (≈ $${tiny(usd)})`:''}`],['Nhiệm vụ đã hoàn thành',nf(v.questsCompleted,0)],['Nguồn số liệu','Avalanche Data API']]);
+}
+function villageNeighbors(){
+  if(!VILLAGE)return '';
+  const me=CH.account?.toLowerCase(),f=VILLAGE.farmers.filter(x=>x.who!==me).slice(0,8);
+  return (f.length?'<p class="label">Hàng xóm vừa ghé làng</p><div class="row">'+f.map(x=>`<button class="btn" data-act="pick-neighbor" data-arg="${x.who}" title="${ago(x.at)}">${short(x.who)}</button>`).join('')+'</div>':'')+
+    (VILLAGE.activity.length?'<p class="label">Bảng tin làng</p><div class="list">'+VILLAGE.activity.slice(0,8).map(a=>`<div class="item" style="grid-template-columns:1fr"><small>${ago(a.at)} · <a href="${CH.explorerTx(a.tx)}" target="_blank" rel="noopener">xem giao dịch</a></small><span style="font-size:13px">${short(a.who)}${meTag(a.who)} ${esc(a.text)}</span></div>`).join('')+'</div>':'');
+}
+function villageBoard(){
+  const b=VILLAGE?.leaderboard;if(!b?.length)return '';
+  return '<p class="label">Bảng xếp hạng nhiệm vụ</p><div class="list">'+b.slice(0,5).map((e,i)=>`<div class="item" style="grid-template-columns:auto 1fr auto;align-items:center;gap:10px"><b>${i+1}</b><span>${short(e.who)}${meTag(e.who)}</span><small>${e.quests+1} nhiệm vụ</small></div>`).join('')+'</div>';
+}
 /* ---------- Nhiệm vụ (FarmQuests) ---------- */
 /* Nhiệm vụ 1 is connecting a wallet: it is checked here in the browser (the contract only sees wallets that are
    already connected), so it has no USDC reward. The on-chain quests follow as nhiệm vụ 2 onwards. */
@@ -775,7 +808,7 @@ LIVE.quests={
   title:'Nhiệm vụ',tag:'Từ dễ đến khó',chains:[['C-Chain','c'],['Fee manager','x']],
   stats:()=>{const Q=CH.data?.quest;if(!CH.hasQuests)return '<p class="note">Nhiệm vụ chưa được bật trên mạng này.</p>';if(!Q)return '<p class="note">Đang đọc nhiệm vụ…</p>';
     return kv([['Đã xong',`${Math.min(Q.index,CH.QUESTS.length)+1}/${questTotal()} nhiệm vụ`],['Thưởng tiếp theo',Q.done?'Đã nhận hết':'+'+nf(Q.reward,0)+' USDC test']])+busyLine()+
-      (Q.done?'<p class="note ok"><b>Bạn đã hoàn thành mọi nhiệm vụ!</b> Giờ bạn là lão nông DeFi thật sự.</p>':'')+questRows(Q.index,Q.ready)},
+      (Q.done?'<p class="note ok"><b>Bạn đã hoàn thành mọi nhiệm vụ!</b> Giờ bạn là lão nông DeFi thật sự.</p>':'')+questRows(Q.index,Q.ready)+villageBoard()},
   actions:()=>'<p class="note">Mỗi nhiệm vụ được contract kiểm tra trên blockchain, không gian lận được. Phải làm xong nhiệm vụ trước mới mở nhiệm vụ sau. Thưởng là USDC test, không có giá trị thật.</p>'
 };
 function renderQuestTrack(){
@@ -800,7 +833,7 @@ function questTarget(){
   return {x:(z.sx!=null?z.sx:z.ax)*T,y:((z.sx!=null?z.sy:z.ay)-1.4)*T};
 }
 const panelFor=id=>(CH.live&&CH.data&&LIVE[id])||PANELS[id];
-const cAct=(p,ok)=>p.then(r=>{if(ok)toast(ok);return r}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
+const cAct=(p,ok)=>p.then(r=>{if(ok)toast(ok+(CH.lastTx?.ms?` (xác nhận sau ${secs(CH.lastTx.ms)})`:''));return r}).catch(e=>toast(CH.errMsg?CH.errMsg(e):String(e.message||e)));
 const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>icm(zone,'C-Chain',`Đã ghi lên chain · tx ${short(r.hash)}`),400)};
 Object.assign(ACT,{
   'w-game'(){connectWith('game')},
@@ -843,6 +876,7 @@ Object.assign(ACT,{
   'c-water'(id){cAct(CH.water(Number(id)).then(r=>{sent('orchard',`water(#${id})`)(r);floatZ('orchard','Tưới #'+id,'#6cbde0')}),'Đã tưới cây.')},
   'c-collect'(){cAct(CH.collect().then(sent('neighbor','collect()')),'Đã gom điểm mùa.')},
   'c-guard'(arg){cAct(CH.setGuard(arg==='1').then(sent('neighbor','setGuard()')))},
+  'pick-neighbor'(a){const i=$('#steal-addr');if(i){i.value=a;i.focus()}},
   'c-steal'(){const a=($('#steal-addr')?.value||'').trim();if(!/^0x[0-9a-fA-F]{40}$/.test(a))return toast('Nhập địa chỉ ví 0x… của bạn bè.');if(a.toLowerCase()===CH.account.toLowerCase())return toast('Không tự hái trộm vườn mình được.');
     cAct(CH.steal(a).then(r=>{sent('neighbor',`steal(${short(a)})`)(r);floater(41.5,12,'Hái trộm!','#f2c14e')}),'Đã hái trộm.')},
   'c-avax-faucet'(){cAct(CH.avaxFaucet().then(sent(current||'coop','faucet() · nhận 20 gAVAX test')),'Đã nhận 20 gAVAX test.')},
@@ -909,6 +943,7 @@ function openZone(id){
   $('#p-chains').innerHTML=(pnl.chains||z.chains||[]).map(([n,c])=>`<span class="chain ${c}">${n}</span>`).join('');
   $('#p-actions').innerHTML=pnl.actions();
   $('#p-stats').innerHTML=pnl.stats();
+  if(VILLAGE_ZONES.includes(id))loadVillage();
   $('#panel').classList.toggle('left',id==='quests');app.classList.toggle('qopen',id==='quests');
   $('#panel').hidden=false;app.classList.add('open');
   $('#panel .pbody').scrollTop=0;
