@@ -46,11 +46,11 @@ const css = `
 .tut-dots i{width:7px;height:7px;border-radius:50%;background:#3a5145}
 .tut-dots i.on{background:#f2c14e}
 .tut-dots i.done{background:#86d36f}
-.tut button{font:700 13px "Be Vietnam Pro",system-ui,sans-serif;border-radius:9px;padding:7px 12px;cursor:pointer;border:1px solid #3a5145;background:#26372e;color:#f3ecd9}
+.tut button{white-space:nowrap;font:700 13px "Be Vietnam Pro",system-ui,sans-serif;border-radius:9px;padding:7px 12px;cursor:pointer;border:1px solid #3a5145;background:#26372e;color:#f3ecd9}
 .tut button:hover{border-color:#f2c14e}
 .tut button.go{background:#f2c14e;color:#0f1814;border-color:#f2c14e}
 .tut button.skip{background:transparent;color:#aebaa3}
-.tut-wait{font-size:12px;color:#f2c14e;display:flex;align-items:center;gap:6px}
+.tut-wait{white-space:nowrap;font-size:12px;color:#f2c14e;display:flex;align-items:center;gap:6px}
 .tut-wait::before{content:"";width:8px;height:8px;border-radius:50%;background:#f2c14e;animation:tut-pulse 1s infinite}
 .tut-glow{outline:3px solid #f2c14e!important;outline-offset:3px;border-radius:10px;animation:tut-ring 1.2s ease-in-out infinite}
 @keyframes tut-in{from{opacity:0;transform:translate(-50%,16px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
@@ -65,8 +65,8 @@ const style = doc.createElement('style'); style.textContent = css; doc.head.appe
 const card = doc.createElement('div');
 card.className = 'tut'; card.hidden = true; card.setAttribute('role', 'dialog'); card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-label', 'Hướng dẫn chơi');
 card.innerHTML = `<div class="tut-top"><div class="tut-badge" id="tut-n">1</div><h3 id="tut-t"></h3></div><p id="tut-x"></p>
-  <div class="tut-foot"><div class="tut-dots" id="tut-d"></div><span class="tut-wait" id="tut-w" hidden>Đang chờ bạn làm</span>
-  <button class="skip" id="tut-skip" type="button">Bỏ qua hướng dẫn</button><button class="go" id="tut-next" type="button">Tiếp</button></div>`;
+  <div class="tut-foot"><div class="tut-dots" id="tut-d"></div><span class="tut-wait" id="tut-w" hidden>Đang chờ…</span>
+  <button class="skip" id="tut-skip" type="button">Bỏ qua</button><button class="go" id="tut-next" type="button">Tiếp</button></div>`;
 F.stage.appendChild(card);
 const el = { n: $('#tut-n'), t: $('#tut-t'), x: $('#tut-x'), d: $('#tut-d'), w: $('#tut-w'), skip: $('#tut-skip'), next: $('#tut-next') };
 
@@ -97,7 +97,7 @@ function render() {
   el.d.innerHTML = STEPS.map((_, k) => `<i class="${k < i ? 'done' : k === i ? 'on' : ''}"></i>`).join('');
   const waits = !!s.done;
   el.w.hidden = !waits;
-  el.next.textContent = waits ? 'Bỏ bước này' : (s.next || 'Tiếp');
+  el.next.textContent = waits ? 'Bỏ bước' : (s.next || 'Tiếp');
   el.next.classList.toggle('go', !waits);
   el.skip.hidden = i === STEPS.length - 1;
   card.hidden = false;
@@ -154,7 +154,7 @@ F.on('worldTop', (ctx, t) => {
 // off-screen: an edge arrow pointing toward the target
 F.on('screen', (ctx, t, w, h) => {
   const p = targetPoint(); if (!p) return;
-  const k = F.zoom * F.dpr, sx = (p.x - F.cam.x) * k, sy = (p.y - F.cam.y) * k, m = 34 * F.dpr;
+  const k = F.zoom * F.dpr, sx = (p.x - F.cam.x) * k, sy = (p.y - F.cam.y) * k, m = 60 * F.dpr;
   if (sx > m && sx < w - m && sy > m && sy < h - m) return;
   const cx = w / 2, cy = h / 2, a = Math.atan2(sy - cy, sx - cx);
   const ex = Math.max(m, Math.min(w - m, sx)), ey = Math.max(m, Math.min(h - m, sy));
