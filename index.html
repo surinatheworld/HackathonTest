@@ -516,7 +516,8 @@ const short=h=>h?h.slice(0,6)+'…'+h.slice(-4):'';
 const busyLine=()=>CH.busy?`<p class="note warn">Đang xử lý: ${esc(CH.busy)}…</p>`:'';
 const liveTag='<span class="pill g">On-chain</span>';
 const gasTag=()=>CH.gasless?'<span class="pill g">Miễn phí gas</span>':CH.walletKind==='metamask'?'<span class="pill y">Bạn tự trả gas</span>':'<span class="pill r">Fee manager chưa bật</span>';
-const sig=()=>CH.walletKind==='game'?'Ví trong game tự ký':'Ký trong MetaMask';
+const WALLET_NAME={game:'Ví trong game',privy:'Privy (email / Google)',metamask:'MetaMask / Core'};
+const sig=()=>CH.walletKind==='game'?'Ví trong game tự ký':CH.walletKind==='privy'?'Ví Privy tự ký':'Ký trong MetaMask';
 Object.assign(PANELS,{
   wallet:{
     title:'Ví của bạn',tag:'Đăng nhập không cần cài gì',chains:[['C-Chain','c'],['Fee manager','x']],
@@ -525,9 +526,10 @@ Object.assign(PANELS,{
       if(!CH.live)return `<p class="note">Chọn cách vào nông trại. Mọi thao tác chỉ cần <b>ký</b>, phí gas do <b>fee manager</b> của game trả hộ.</p>
         <div class="list">
           <button class="tier" data-act="w-game"><b>Ví trong game</b><small>${CH.hasSavedGameWallet()?'Mở lại ví đã tạo trên trình duyệt này':'Tạo ví mới ngay, không cần cài gì'}</small><em>Khuyên dùng</em></button>
+          ${CH.hasPrivy?'<button class="tier" data-act="w-privy"><b>Email / Google</b><small>Đăng nhập bằng Privy, ví được tạo sẵn cho bạn</small><em>Dễ nhất</em></button>':''}
           <button class="tier" data-act="w-mm"><b>MetaMask / Core</b><small>${CH.hasMetaMask?'Dùng ví trình duyệt của bạn':'Không thấy ví trình duyệt'}</small></button>
         </div>`;
-      return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',CH.walletKind==='game'?'Ví trong game':'MetaMask / Core'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]])+
+      return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',WALLET_NAME[CH.walletKind]||'Ví'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]])+
         `<div class="row"><button class="btn" data-act="w-copy">Sao chép địa chỉ</button>${CH.walletKind==='game'?'<button class="btn" data-act="w-export">Sao lưu khóa ví</button>':''}<button class="btn danger" data-act="w-out">Thoát ví</button></div>`+
         (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastPath==='gasless'?' · fee manager trả gas':''}</p>`:'');
     },
@@ -605,6 +607,7 @@ const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>
 Object.assign(ACT,{
   'w-game'(){connectWith('game')},
   'w-mm'(){connectWith('metamask')},
+  'w-privy'(){toast('Đang mở Privy…');connectWith('privy')},
   'w-copy'(){navigator.clipboard?.writeText(CH.account).then(()=>toast('Đã chép địa chỉ ví.')).catch(()=>toast(CH.account))},
   'w-export'(){const el=$('#w-key');if(!el)return;if(!el.hidden){el.hidden=true;return}el.textContent='Khóa riêng (testnet, đừng gửi cho ai):\n'+CH.exportKey();el.hidden=false},
   'w-out'(){CH.disconnect();liveInit=false;const w=$('#b-wallet');w.textContent='Kết nối ví';w.classList.add('primary');document.querySelectorAll('[data-speed]').forEach(b=>b.disabled=false);toast('Đã thoát ví. Ví trong game vẫn được giữ trên trình duyệt này.');openZone('wallet')},
@@ -649,7 +652,7 @@ CH.on?.(()=>{
     st.locks=[];st.butler.lastMove=-9;
     document.querySelectorAll('[data-speed]').forEach(b=>{b.disabled=true;b.title='On-chain: 1 ngày game = '+CH.cfg.dayLength+' giây'});
     const w=$('#b-wallet');w.textContent=short(CH.account);w.classList.remove('primary');
-    icm('gate','C-Chain','Đã vào nông trại bằng '+(CH.walletKind==='game'?'ví trong game ':'MetaMask ')+short(CH.account));
+    icm('gate','C-Chain','Đã vào nông trại bằng '+WALLET_NAME[CH.walletKind]+' '+short(CH.account));
     toast(CH.gasless?'Đã kết nối. Mọi thao tác miễn phí gas.':'Đã kết nối.');
     if(current)openZone(current);
   }

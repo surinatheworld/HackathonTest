@@ -3,6 +3,7 @@ window.FARM_CONFIG = {
   "dayLength": 60,
   "owner": "0x54A2276F134d3Cfaa7572BC326092fABa6352888",
   "relayUrl": "/api/relay",
+  "privyAppId": "cmvb7x7s001zg0fkxwxk6yx5n",
   "cchain": {
     "chainId": 43113,
     "name": "Avalanche Fuji C-Chain",

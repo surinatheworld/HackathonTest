@@ -101,6 +101,8 @@
   const domain = { name: "NongTraiDeFi", version: "1", chainId: c.chainId, verifyingContract: c.forwarder };
   const relayUrl = cfg.relayUrl || "/api/relay";
   let signer = null;
+  let privy = null; // prototype/privy.js, loaded on first use
+  CH.hasPrivy = !!cfg.privyAppId;
 
   // ---------- fee manager status ----------
   CH.checkRelay = async () => {
@@ -159,6 +161,11 @@
         CH.account = await signer.getAddress();
         CH.refresh().catch(() => {});
       });
+    } else if (kind === "privy") {
+      if (!cfg.privyAppId) throw new Error("Chưa cấu hình Privy App ID.");
+      privy = privy || (await import("/prototype/privy.js"));
+      const { provider } = await privy.connect();
+      signer = await new E.BrowserProvider(provider).getSigner();
     } else {
       signer = loadGameWallet();
     }
@@ -172,6 +179,7 @@
   };
 
   CH.disconnect = () => {
+    if (CH.walletKind === "privy") privy?.logout().catch(() => {});
     clearInterval(CH._timer);
     signer = null;
     CH.live = false;

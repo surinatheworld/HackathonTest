@@ -88,6 +88,7 @@ async function main() {
     dayLength: DAY_LENGTH,
     owner,
     relayUrl: "/api/relay",
+    privyAppId: process.env.PRIVY_APP_ID || "cmvb7x7s001zg0fkxwxk6yx5n",
     cchain: { chainId: 43113, name: "Avalanche Fuji C-Chain", rpc: FUJI_RPC, explorer: "https://testnet.snowtrace.io", currency: "AVAX", ...addrs },
   };
   const repo = path.join(__dirname, "..", "..");
