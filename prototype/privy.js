@@ -57,7 +57,8 @@ createRoot(host).render(
       config: {
         loginMethods: ["email", "google"],
         appearance: { theme: "light", accentColor: "#3f8f3a", landingHeader: "Vào Nông Trại DeFi", loginMessage: "Đăng nhập bằng email hoặc Google. Ví được tạo sẵn, không cần AVAX." },
-        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: false },
+        // Wallet screens stay on: the key export runs inside one, and the dashboard enforces them for signing.
+        embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
         defaultChain: fuji,
         supportedChains: [fuji],
       },
