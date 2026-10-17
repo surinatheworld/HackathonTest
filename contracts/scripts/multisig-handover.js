@@ -1,7 +1,8 @@
 // npm run multisig:handover
 // Gives FarmMultisig (2-of-3) ownership of every contract that holds or steers pooled money:
 // FarmGame (reward pool, yield source), FarmCoop (lending pool, price feed choice), FarmQuests (quest reward pool)
-// and FarmItems (market fee, season trophies). Runs as the current owner (PRIVATE_KEY). One-way: after this,
+// and FarmItems (market fee, season trophies). Contracts the running wallet (PRIVATE_KEY) owns are moved directly;
+// for the ones another wallet owns it prints the Snowtrace call that wallet makes. One-way: after this,
 // changing those contracts needs two teammates (submit → confirm → execute on FarmMultisig).
 // DemoPriceFeed stays with the deployer: it holds no money, and FarmCoop only listens to it after the multisig
 // calls setOracle, so the on-stage "hạn hán" demo still needs two teammates to switch it on.
@@ -29,7 +30,10 @@ async function main() {
       console.log(`${name}: đã thuộc multisig`);
       continue;
     }
-    if (cur.toLowerCase() !== me.address.toLowerCase()) throw new Error(`${name} thuộc ${cur}, không phải ví đang chạy.`);
+    if (cur.toLowerCase() !== me.address.toLowerCase()) {
+      console.log(`${name}: thuộc ví ${cur}. Ví đó vào Snowtrace → ${addr} → Write Contract, gọi transferOwnership(${d.multisig}).`);
+      continue;
+    }
     if (!process.env.CONFIRM) {
       console.log(`${name}: sẽ chuyển ${cur} → ${d.multisig} (chạy lại với CONFIRM=1 để thực hiện)`);
       continue;
