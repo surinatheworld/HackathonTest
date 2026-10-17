@@ -205,7 +205,7 @@ export async function relay(body, env, config) {
       if (/nonce|replacement|already known|underpriced/i.test(m)) continue;
       throw e;
     }
-    const rc = await provider.waitForTransaction(tx.hash, 1, 12_000).catch(() => null);
+    const rc = await provider.waitForTransaction(tx.hash, 1, 6_000).catch(() => null);
     if (rc) return json(200, { hash: tx.hash, relayer: wallet.address, status: rc.status });
     // not mined in time: either dropped, or still waiting
     if (!(await fwd.verify(req).catch(() => true))) return json(200, { hash: tx.hash, relayer: wallet.address });

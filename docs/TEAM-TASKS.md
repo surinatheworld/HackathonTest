@@ -54,6 +54,7 @@
 
 | Ưu tiên | Việc | Xong khi |
 |---|---|---|
+| P0 | **Hàng đợi nonce cho fee manager**: chỉ có một ví trả gas, và RPC công khai của Fuji không cho thấy giao dịch đang chờ. Nhiều người gửi cùng lúc thì trùng nonce: hiện `relay-core.js` chờ giao dịch lên chain rồi gửi lại nếu bị bỏ, nên vẫn đúng nhưng chậm (6 người cùng lúc thì người cuối đợi khoảng 40 giây). Cách sửa: cấp nonce tuần tự bằng một Durable Object, hoặc dùng nhiều ví trả gas, chọn ví theo địa chỉ người chơi | 6 người gửi cùng lúc, ai cũng xong trong khoảng 3 giây |
 | P0 | **Giới hạn fee manager**: số lượt và gas mỗi ví, mỗi IP mỗi ngày (Cloudflare KV), trả `429` kèm thông báo tiếng Việt | Một ví spam không rút cạn được ví trả gas |
 | P0 | **Cảnh báo số dư ví trả gas**: Worker riêng chạy Cron (Pages Functions không có Cron), báo Discord/Telegram khi dưới 0,1 AVAX | Nhận được cảnh báo thử |
 | P0 | **Indexer và API**: `/api/leaderboard`, `/api/farmers`, `/api/activity`. Đọc event bằng `getLogs` chia đoạn (Fuji giới hạn 100 block mỗi lần) hoặc Routescan API, cache vào KV | Gameplay gọi được, phản hồi dưới 500 ms |
