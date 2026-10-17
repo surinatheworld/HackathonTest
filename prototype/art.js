@@ -152,11 +152,25 @@ function waterDepth() {
   return d;
 }
 
-function waterTile(g, x, y, depth) {
+/** distance in px from world point (wx,wy) to the nearest non-water tile, searched within 4 tiles */
+function shoreDist(wx, wy) {
+  const tx = Math.floor(wx / T), ty = Math.floor(wy / T);
+  let best = 4 * T;
+  for (let yy = ty - 4; yy <= ty + 4; yy++) for (let xx = tx - 4; xx <= tx + 4; xx++) {
+    const t = at(xx, yy);
+    if (t < 0 || isWater(t)) continue;
+    const dx = Math.max(xx * T - wx, 0, wx - (xx + 1) * T), dy = Math.max(yy * T - wy, 0, wy - (yy + 1) * T);
+    best = Math.min(best, Math.hypot(dx, dy));
+  }
+  return best;
+}
+function waterTile(g, x, y) {
   const px = x * T, py = y * T;
-  for (let by = 0; by < T; by += 8) for (let bx = 0; bx < T; bx += 8) {
-    const k = Math.max(0, Math.min(1, depth + (hsh(x * 4 + bx / 8, y * 4 + by / 8, 13) - .5) * .25));
-    R(g, lerpHex('#5fb6d4', '#2a729f', k), px + bx, py + by, 8, 8);
+  // depth follows the real distance to the shore per 4 px block, so the pond darkens smoothly toward its middle
+  for (let by = 0; by < T; by += 4) for (let bx = 0; bx < T; bx += 4) {
+    const d = shoreDist(px + bx + 2, py + by + 2) / (3.2 * T);
+    const e = Math.min(1, d), k = e * e * (3 - 2 * e) + (hsh(x * 8 + bx / 4, y * 8 + by / 4, 13) - .5) * .06;
+    R(g, lerpHex('#62b8d5', '#2a729f', Math.max(0, Math.min(1, k))), px + bx, py + by, 4, 4);
   }
   for (let k = 0; k < 3; k++) if (hsh(x, y, 120 + k) < .5) R(g, 'rgba(255,255,255,.16)', px + Math.floor(hsh(x, y, 130 + k) * 24), py + Math.floor(hsh(x, y, 140 + k) * 30), 6, 1);
   const shore = (nx, ny) => { const t = at(nx, ny); return t >= 0 && !isWater(t); };
@@ -440,7 +454,7 @@ function buildStatic() {
     else if (t === D) fieldTile(g, x, y);
     else if (t === PL) plazaTile(g, x, y);
     else if (t === SA) sandTile(g, x, y);
-    else if (t === WA || t === K) waterTile(g, x, y, depth[y * W + x]);
+    else if (t === WA || t === K) waterTile(g, x, y);
   }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (map[y * W + x] === K) dockTile(g, x, y);
 
