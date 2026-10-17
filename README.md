@@ -1,5 +1,7 @@
 # Nông Trại DeFi
 
+[![CI](https://github.com/surinatheworld/HackathonBlockchain/actions/workflows/ci.yml/badge.svg)](https://github.com/surinatheworld/HackathonBlockchain/actions/workflows/ci.yml)
+
 Game nông trại 2D để học DeFi trên Avalanche. Dự án cho **Team1 Vietnam UniHack 2026** (topic 11, DeFi Farm).
 
 Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình là một cơ chế DeFi thật, chạy trên **Avalanche Fuji C-Chain**. Người chơi **không cần cài ví, không cần AVAX**: đăng nhập bằng *ví trong game*, mọi thao tác chỉ cần ký, còn **fee manager** của game trả gas hộ.

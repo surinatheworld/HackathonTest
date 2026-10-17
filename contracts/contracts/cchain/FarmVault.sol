@@ -172,6 +172,8 @@ contract FarmVault is ICMApp {
         else if (tier > 2) reason = 2;
         else if (amount == 0) reason = 3;
         else {
+            // `user` is the L1 player who signed the PLANT there; only FarmLand on the registered L1 can send it.
+            // slither-disable-next-line arbitrary-send-erc20
             try usdc.transferFrom(user, address(this), amount) returns (bool ok) {
                 if (!ok) reason = 4;
             } catch {
