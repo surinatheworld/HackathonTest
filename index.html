@@ -110,6 +110,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;displa
 /* Nhiệm vụ */
 .qtrack{position:absolute;top:52px;left:max(12px,env(safe-area-inset-left,0px));z-index:3;display:flex;align-items:center;gap:8px;max-width:min(360px,calc(100% - 24px));background:rgba(15,24,20,.86);border:1px solid var(--line);border-radius:12px;padding:7px 11px;color:var(--ink);font:600 12.5px var(--body);cursor:pointer;text-align:left}
 .qtrack:hover{border-color:var(--straw)}
+/* Nhiệm vụ opens on the left, next to the quest tracker it replaces (phones keep the bottom sheet) */
+@media (min-width:761px){.panel.left{right:auto;left:max(12px,env(safe-area-inset-left,0px))}.app.qopen .qtrack{display:none}}
 .qtrack b{color:var(--straw)}
 .qtrack small{display:block;color:var(--muted);font-weight:500;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qtrack.ready{border-color:var(--straw);box-shadow:0 0 0 2px rgba(242,193,78,.25),0 0 18px rgba(242,193,78,.35);animation:q-pulse 1.4s ease-in-out infinite}
@@ -881,12 +883,13 @@ function openZone(id){
   $('#p-chains').innerHTML=(pnl.chains||z.chains||[]).map(([n,c])=>`<span class="chain ${c}">${n}</span>`).join('');
   $('#p-actions').innerHTML=pnl.actions();
   $('#p-stats').innerHTML=pnl.stats();
+  $('#panel').classList.toggle('left',id==='quests');app.classList.toggle('qopen',id==='quests');
   $('#panel').hidden=false;app.classList.add('open');
   $('#panel .pbody').scrollTop=0;
   const t=$('#term');if(t)t.scrollTop=t.scrollHeight;
   run('open',id);
 }
-function closePanel(){const was=current;current=null;$('#panel').hidden=true;app.classList.remove('open');cv.focus();run('close',was)}
+function closePanel(){const was=current;current=null;$('#panel').hidden=true;app.classList.remove('open','qopen');cv.focus();run('close',was)}
 function renderStats(){
   if(!current)return;
   const t=$('#term'),stick=t&&t.scrollTop+t.clientHeight>=t.scrollHeight-8;

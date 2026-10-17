@@ -562,6 +562,9 @@ a.btn:visited{color:var(--ink)}
 @keyframes ui-panel-in-a{0%{transform:translateX(calc(100% + 30px));opacity:.3}62%{transform:translateX(-7px);opacity:1}100%{transform:none}}
 @keyframes ui-panel-in-b{0%{transform:translateX(calc(100% + 30px));opacity:.3}62%{transform:translateX(-7px);opacity:1}100%{transform:none}}
 @keyframes ui-panel-out{to{transform:translateX(calc(100% + 30px));opacity:.2}}
+@keyframes ui-panel-in-l{0%{transform:translateX(calc(-100% - 30px));opacity:.3}62%{transform:translateX(7px);opacity:1}100%{transform:none}}
+@keyframes ui-panel-out-l{to{transform:translateX(calc(-100% - 30px));opacity:.2}}
+@media (min-width:761px){.panel.left:not([hidden]),.panel.left.ui-re:not([hidden]){animation-name:ui-panel-in-l}.panel.left[hidden].ui-closing{animation-name:ui-panel-out-l}}
 @keyframes ui-sheet-in-a{0%{transform:translateY(calc(100% + 24px))}64%{transform:translateY(-6px)}100%{transform:none}}
 @keyframes ui-sheet-in-b{0%{transform:translateY(calc(100% + 24px))}64%{transform:translateY(-6px)}100%{transform:none}}
 @keyframes ui-sheet-out{to{transform:translateY(calc(100% + 24px))}}
