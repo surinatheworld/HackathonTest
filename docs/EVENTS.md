@@ -90,6 +90,14 @@ ERC-1155. Id: nông sản = `loại × 1e9 + ngày thu hoạch` (loại 1 ớt, 
 
 **Bảng đổi đồ**: `offerCount()` rồi `offer(i)` cho các id mới nhất; đề nghị còn mở khi `open && expires >= now`. Điểm mùa còn dùng được: `pointsOf(address)` (điểm FarmGame trừ phần đã tiêu ở đây).
 
+## FarmQuests (`cchain.quests`): Nhiệm vụ
+
+| Event | Tham số | Ý nghĩa |
+|---|---|---|
+| `QuestCompleted` | `user`, `quest` (indexed), `reward` | Xong nhiệm vụ số `quest` (0–17), nhận `reward` USDC test |
+
+Tiến độ: `progress(address)` (số nhiệm vụ đã xong). Nhiệm vụ hiện tại: `status(address)` → `(quest, ready, reward)`. Bảng xếp hạng nhiệm vụ: đếm `QuestCompleted` theo `user`.
+
 ## Token
 
 `GaslessUSDC` (`cchain.usdc`) và `GaslessAVAX` (`cchain.gavax`) là ERC-20 chuẩn: `Transfer(from, to, value)`, `Approval(owner, spender, value)`. Lần nhận faucet là `Transfer` từ `0x0000…0000`.

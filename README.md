@@ -33,6 +33,10 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
   - **Đồ trang trí**: mua bằng điểm mùa, hoặc ghép từ nông sản thành Mâm ngũ quả. Nón lá đội lên được cho nhân vật, đồ trang trí bày ở Nhà mình.
   - **Chợ đổi đồ**: chỉ đổi đồ lấy đồ, contract giữ đồ hộ trong lúc chờ. Phí là 1 điểm mùa cho mỗi món đưa ra. Vật phẩm chỉ đổi chủ qua chợ, nên không lách được phí, và **không có cách nào đổi vật phẩm ra USDC**.
+- **FarmQuests** (Nhiệm vụ): 18 nhiệm vụ chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy).
+  - Mở khoá lần lượt. Contract tự kiểm tra trên chain là người chơi đã làm thật.
+  - Thưởng USDC test tăng dần từ 10 đến 200, tổng 760. Lên mainnet thì thưởng đổi sang điểm hoặc đồ trang trí, không trả tiền thật.
+  - Contract không có owner.
 - **Tặng tiền test**: người chơi tặng USDC hoặc gAVAX test cho bạn bè ngay trong game, không mất phí.
 - **FarmForwarder**: `ERC2771Forwarder` của OpenZeppelin. Kiểm tra chữ ký, nonce (chống phát lại) và hạn của request.
 - **Fee manager** (`functions/api/relay.js`): Cloudflare Pages Function.
@@ -57,6 +61,7 @@ Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md))
 | GaslessUSDC | [`0x794659AB388EEec7f80038191bA763f900CE1978`](https://testnet.snowtrace.io/address/0x794659AB388EEec7f80038191bA763f900CE1978#code) |
 | GaslessAVAX (gAVAX) | [`0xa1e8250Bcbab7436252e3c25764f8898913E7c1C`](https://testnet.snowtrace.io/address/0xa1e8250Bcbab7436252e3c25764f8898913E7c1C#code) |
 | FarmForwarder | [`0x7dD93fef1ce942f11fc72E5BD7F53f749A028636`](https://testnet.snowtrace.io/address/0x7dD93fef1ce942f11fc72E5BD7F53f749A028636#code) |
+| FarmQuests | [`0xD6Da1E5E5209203f002Aed2bab709B7E6C7aA737`](https://testnet.snowtrace.io/address/0xD6Da1E5E5209203f002Aed2bab709B7E6C7aA737#code) |
 | FarmItems | [`0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174`](https://testnet.snowtrace.io/address/0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174#code) |
 | ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
 | MockYieldSource | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
@@ -107,7 +112,7 @@ docs/SECURITY.md                Kết quả Slither và các tình huống đã 
 ```bash
 cd contracts
 npm install
-npm test            # 52 test
+npm test            # 55 test
 npm run test:fork   # 6 test trên chính các contract đang chạy ở Fuji
 npm run local       # http://localhost:8790, chuỗi local + fee manager local
 ```
@@ -129,6 +134,7 @@ Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** 
 
 | Kho đồ | Nông sản, huy hiệu học DeFi, đồ trang trí | On-chain (FarmItems) |
 | Chợ đổi đồ | Đổi đồ lấy đồ, phí bằng điểm | On-chain (FarmItems) |
+| Nhiệm vụ | 18 bài tập từ dễ đến khó, có thưởng | On-chain (FarmQuests) |
 
 Không có token game, không có random drop, không lootbox: mọi thứ tất định. Vật phẩm không đổi ra tiền.
 

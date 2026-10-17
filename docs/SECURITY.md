@@ -45,7 +45,14 @@ Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có
 - Cúp mùa vụ tối đa 10 mỗi mùa.
 - Chạy được gasless.
 
-## Các tình huống có test (52 test thường, 6 test fork)
+### FarmQuests (Nhiệm vụ)
+
+- Không có owner và không có hàm quản trị.
+- Mỗi nhiệm vụ chỉ nhận được một lần, theo đúng thứ tự.
+- Điều kiện được đọc trực tiếp từ FarmGame, FarmCoop, FarmPond và FarmItems.
+- 3 test trong `test/quests.test.js`: đi hết 18 nhiệm vụ, không nhảy cóc, chạy được gasless.
+
+## Các tình huống có test (55 test thường, 6 test fork)
 
 - **Quỹ thưởng không bị rút cạn**: lãi chỉ trả tới mức quỹ còn, gốc luôn được trả đủ (`coop-pond.test.js`).
 - **Fee manager không bị lạm dụng**:
