@@ -45,11 +45,12 @@ function freeSpot(x, y, pad = 1) {
 const GRASS = ['#6cae4c', '#69aa49', '#70b250'];
 function grassTile(g, x, y) {
   const px = x * T, py = y * T;
-  R(g, pick(GRASS, hsh(x, y, 1)), px, py, T, T);
-  for (let by = 0; by < T; by += 4) for (let bx = 0; bx < T; bx += 4) {
-    const r = hsh(x * 8 + bx / 4, y * 8 + by / 4, 2);
-    if (r < .16) R(g, '#63a245', px + bx, py + by, 4, 4);
-    else if (r > .92) R(g, '#78ba57', px + bx, py + by, 4, 4);
+  // One base colour everywhere, so tiles never show as a checkerboard; texture comes from small specks.
+  R(g, GRASS[0], px, py, T, T);
+  for (let by = 0; by < T; by += 2) for (let bx = 0; bx < T; bx += 2) {
+    const r = hsh(x * 16 + bx / 2, y * 16 + by / 2, 2);
+    if (r < .07) R(g, '#66a748', px + bx, py + by, 2, 2);
+    else if (r > .965) R(g, '#76b856', px + bx, py + by, 2, 2);
   }
   for (let k = 0; k < 5; k++) {
     if (hsh(x, y, 10 + k) > .62) continue;
@@ -78,7 +79,7 @@ function pathTile(g, x, y) {
   R(g, '#d5ae74', px, py, T, T);
   for (let by = 0; by < T; by += 4) for (let bx = 0; bx < T; bx += 4) {
     const r = hsh(x * 8 + bx / 4, y * 8 + by / 4, 3);
-    if (r < .2) R(g, '#c9a067', px + bx, py + by, 4, 4); else if (r > .9) R(g, '#dfbc85', px + bx, py + by, 4, 4);
+    if (r < .12) R(g, '#cea870', px + bx, py + by, 4, 4); else if (r > .94) R(g, '#dbb880', px + bx, py + by, 4, 4);
   }
   for (let k = 0; k < 4; k++) if (hsh(x, y, k + 3) < .55) {
     const sx = px + 2 + Math.floor(hsh(x, y, k + 5) * 26), sy = py + 2 + Math.floor(hsh(x, y, k + 7) * 26);
