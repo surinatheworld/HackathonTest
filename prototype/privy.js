@@ -82,10 +82,16 @@ const linkedWallets = (s) =>
   (s.privy?.user?.linkedAccounts || [])
     .filter((a) => a.type === "wallet" && (isPrivy(a.walletClientType) || a.connectorType === "embedded") && (a.chainType || "ethereum") === "ethereum")
     .sort((a, b) => new Date(a.firstVerifiedAt || a.verifiedAt || 0) - new Date(b.firstVerifiedAt || b.verifiedAt || 0));
-/** Always the same wallet for the same account: the oldest embedded wallet, once its provider has loaded. */
+/** The wallet this account chose in the game (remembered per Privy user), else its oldest embedded wallet. */
+const prefKey = (s) => "ntd.privy.wallet." + (s.privy?.user?.id || "");
+const preferred = (s) => {
+  let a = null;
+  try { a = localStorage.getItem(prefKey(s)); } catch (e) { /* private mode */ }
+  return a && linkedWallets(s).some((w) => lower(w.address) === lower(a)) ? a : null;
+};
 const embedded = (s) => {
-  const first = linkedWallets(s)[0];
-  if (first) return s.wallets.find((w) => lower(w.address) === lower(first.address)) || null;
+  const want = preferred(s) || (linkedWallets(s)[0] && linkedWallets(s)[0].address);
+  if (want) return s.wallets.find((w) => lower(w.address) === lower(want)) || null;
   return s.wallets.find((w) => isPrivy(w.walletClientType)) || null;
 };
 
@@ -109,6 +115,21 @@ export async function connect() {
   const wallet = embedded(state);
   await wallet.switchChain(c.chainId).catch(() => {});
   return { provider: await wallet.getEthereumProvider(), address: wallet.address, user: state.privy.user };
+}
+
+/** Addresses of every embedded wallet on this account, oldest first. */
+export function wallets() {
+  return linkedWallets(state).map((a) => a.address);
+}
+
+/** Switch the game to another embedded wallet of the same account and remember the choice. */
+export async function use(address) {
+  if (!linkedWallets(state).some((w) => lower(w.address) === lower(address))) throw new Error("Ví này không thuộc tài khoản Privy đang đăng nhập.");
+  try { localStorage.setItem(prefKey(state), address); } catch (e) { /* private mode */ }
+  await until((s) => embedded(s) && lower(embedded(s).address) === lower(address), 30_000);
+  const wallet = embedded(state);
+  await wallet.switchChain(c.chainId).catch(() => {});
+  return { provider: await wallet.getEthereumProvider(), address: wallet.address };
 }
 
 /** Privy shows the private key in its own secure window; the game never sees it. */

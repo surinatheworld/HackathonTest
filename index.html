@@ -536,11 +536,19 @@ Object.assign(PANELS,{
         </div>`;
       return kv([['Địa chỉ',`<span title="${CH.account}">${short(CH.account)}</span>`],['Loại ví',WALLET_NAME[CH.walletKind]||'Ví'],['Phí gas',gasTag()],['Mạng',esc(CH.cfg.cchain.name)]])+
         `<div class="row"><button class="btn" data-act="w-copy">Sao chép địa chỉ</button>${CH.walletKind==='game'?'<button class="btn" data-act="w-export">Sao lưu khóa ví</button>':''}${CH.walletKind==='privy'?'<button class="btn" data-act="w-privy-export">Xuất khóa ví Privy</button>':''}${CH.walletKind==='metamask'?'<button class="btn" data-act="w-watch">Hiện USDC trong MetaMask</button>':''}<a class="btn" href="${CH.cfg.cchain.explorer}/address/${CH.account}#tokens" target="_blank" rel="noopener">Xem trên Snowtrace</a><button class="btn danger" data-act="w-out">Thoát ví</button></div>`+
+        privyPicker()+
         (CH.lastTx?`<p class="note">Giao dịch gần nhất: ${esc(CH.lastTx.label)} · <a href="${CH.explorerTx(CH.lastTx.hash)}" target="_blank" rel="noopener">${short(CH.lastTx.hash)}</a>${CH.lastPath==='gasless'?' · fee manager trả gas':''}</p>`:'');
     },
     actions:()=>`<p class="note"><b>Muốn thấy USDC trong MetaMask?</b> Bấm <b>Xuất khóa ví</b> (hoặc <b>Sao lưu khóa ví</b>), trong MetaMask chọn <b>Import account</b> rồi dán khóa, sau đó <b>Import tokens</b> với địa chỉ <code>${CH.cfg.cchain.usdc}</code> (USDC, 6 số lẻ). Hoặc bấm <b>Xem trên Snowtrace</b>, mở tab Tokens.</p><p class="note">Ví trong game giữ khóa ngay trên trình duyệt này, <b>chỉ dùng cho testnet</b>. Đổi máy hay xoá dữ liệu trình duyệt thì ví mất, hãy bấm <b>Sao lưu khóa ví</b> nếu muốn giữ.</p><pre class="term" id="w-key" hidden></pre>`
   }
 });
+/** Several embedded wallets on one Privy account: let the player pick which one the game uses. */
+function privyPicker(){
+  const list=CH.walletKind==='privy'&&CH.privyWallets?CH.privyWallets():[];
+  if(list.length<2)return '';
+  return '<p class="label">Ví trong tài khoản Privy này</p><div class="list">'+list.map(a=>{const on=a.toLowerCase()===String(CH.account).toLowerCase();
+    return `<div class="item"><div><b>${short(a)}</b><br><small>${on?'Đang dùng':'Bấm để chuyển sang ví này'}</small></div>${on?'<span class="pill g">Đang dùng</span>':`<button class="btn" data-act="w-privy-use" data-arg="${a}">Dùng ví này</button>`}</div>`}).join('')+'</div>';
+}
 const LIVE={
   home:{
     stats:()=>{const d=CH.data;if(!d)return '<p class="note">Đang đọc dữ liệu từ chain…</p>';
@@ -612,6 +620,7 @@ const sent=(zone,text)=>r=>{icm(zone,'Ký → Fee manager',text);setTimeout(()=>
 Object.assign(ACT,{
   'w-game'(){connectWith('game')},
   'w-mm'(){connectWith('metamask')},
+  'w-privy-use'(a){toast('Đang chuyển ví…');CH.usePrivyWallet(a).then(acc=>{const w=$('#b-wallet');w.textContent=short(acc);icm('gate','C-Chain','Chuyển sang ví Privy '+short(acc));toast('Đã chuyển sang ví '+short(acc)+'.');openZone('wallet')}).catch(e=>toast(CH.errMsg(e)))},
   'w-privy-export'(){CH.exportPrivyKey().catch(e=>toast(CH.errMsg(e)))},
   'w-watch'(){CH.watchToken('usdc').then(()=>CH.hasCoop&&CH.watchToken('gavax')).then(()=>toast('Đã thêm token vào MetaMask.')).catch(e=>toast(CH.errMsg(e)))},
   'w-privy'(){toast('Đang mở Privy…');connectWith('privy')},

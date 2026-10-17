@@ -129,6 +129,16 @@
     return new E.Wallet(pk, rp);
   }
   CH.hasSavedGameWallet = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
+  CH.privyWallets = () => (CH.walletKind === "privy" && privy ? privy.wallets() : []);
+  CH.usePrivyWallet = async (address) => {
+    if (CH.walletKind !== "privy") throw new Error("Không phải ví Privy.");
+    const { provider } = await privy.use(address);
+    signer = await new E.BrowserProvider(provider).getSigner();
+    CH.account = E.getAddress(await signer.getAddress());
+    CH.lastTx = null;
+    await CH.refresh();
+    return CH.account;
+  };
   CH.exportPrivyKey = () => (CH.walletKind === "privy" ? privy.exportKey() : Promise.reject(new Error("Không phải ví Privy.")));
   /** Ask MetaMask to show a farm token (USDC or gAVAX) in its asset list. */
   CH.watchToken = (which = "usdc") => {
