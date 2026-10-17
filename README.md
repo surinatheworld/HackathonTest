@@ -184,6 +184,12 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 
 Bản đầu tiên dùng Farm L1 riêng và ICM (Teleporter) giữa L1 và Fuji. Thư L1 → Fuji đã chạy thật, nhưng hạ tầng testnet managed gặp lỗi: relayer managed không chạy, và node L1 ngừng ra block khi có thư Fuji → L1. Theo góp ý của mentor, dự án chuyển sang Fuji C-Chain cùng fee manager. Chi tiết và mã nguồn bản L1 xem [docs/L1-ARCHIVE.md](docs/L1-ARCHIVE.md).
 
+Lỗi relayer managed đã được báo cho Ava Labs: [ava-labs/builders-hub#4761](https://github.com/ava-labs/builders-hub/issues/4761) (mở ngày 16/10/2026, vẫn chưa được xử lý).
+- Hai relayer managed, cho hai L1 khác nhau, đều báo `health: null` và chưa từng gửi giao dịch nào (nonce = 0), dù đã được nạp gas ở cả hai mạng.
+- Farm L1 v2 đã phát 4 thư `SendCrossChainMessage` sang C-Chain, không thư nào được chuyển.
+- RPC, WebSocket và validator của L1 đều hoạt động. Chạy `avaplatform/icm-relayer:v1.8.2` trên máy riêng với cùng hai chain thì relayer báo `up` sau 11 giây.
+- Kết luận (xem [bình luận kiểm tra](https://github.com/ava-labs/builders-hub/issues/4761#issuecomment-6224876329)): chain và mã của dự án không có lỗi; dịch vụ relayer managed không khởi động được.
+
 ## Mốc thời gian
 
 - 02/11/2026: Opening Event
