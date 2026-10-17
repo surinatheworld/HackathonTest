@@ -3,7 +3,7 @@
 // wallet; chain.js signs the same EIP-712 ForwardRequests with it, and the fee manager still pays the gas.
 import React from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
-import { PrivyProvider, useLogin, usePrivy, useWallets } from "https://esm.sh/@privy-io/react-auth@3.45.0?deps=react@18.3.1,react-dom@18.3.1";
+import { PrivyProvider, useCreateWallet, useLogin, usePrivy, useWallets } from "https://esm.sh/@privy-io/react-auth@3.45.0?deps=react@18.3.1,react-dom@18.3.1";
 
 const cfg = window.FARM_CONFIG;
 const c = cfg.cchain;
@@ -26,6 +26,7 @@ const settle = () => {
 function Bridge() {
   const privy = usePrivy();
   const { wallets, ready } = useWallets();
+  const { createWallet } = useCreateWallet();
   const { login } = useLogin({
     onComplete: settle,
     // Closing the modal lands here too, so connect() can give up instead of waiting.
@@ -36,6 +37,7 @@ function Bridge() {
   });
   state.privy = privy;
   state.login = login;
+  state.createWallet = createWallet;
   state.wallets = wallets;
   state.walletsReady = ready;
   React.useEffect(settle);
@@ -81,7 +83,13 @@ export async function connect() {
     await until((s) => s.privy.authenticated || s.loginError, 15 * 60_000);
     if (!state.privy.authenticated) throw new Error("Bạn đã đóng cửa sổ đăng nhập Privy.");
   }
-  await until((s) => s.walletsReady && embedded(s));
+  await until((s) => s.walletsReady);
+  // The dashboard may have "create on login" off; then make the embedded wallet here, once per user.
+  if (!embedded(state)) {
+    const has = state.privy.user?.linkedAccounts?.some((a) => a.type === "wallet" && a.walletClientType === "privy");
+    if (!has) await state.createWallet();
+  }
+  await until((s) => embedded(s), 60_000);
   const wallet = embedded(state);
   await wallet.switchChain(c.chainId).catch(() => {});
   return { provider: await wallet.getEthereumProvider(), address: wallet.address, user: state.privy.user };
