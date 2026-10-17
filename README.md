@@ -189,6 +189,13 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 - [ ] Bot thanh lý, bot cân giá Ao cá theo Chainlink, indexer cho bảng xếp hạng
 - [ ] Giới hạn lượt trả gas theo người chơi (Cloudflare KV), pixel art thật
 
+## Kiểm thử
+
+- `npm test`: test đơn vị cho mọi contract, kèm **fuzz bất biến**: chuỗi thao tác ngẫu nhiên có seed cố định, sau mỗi bước kiểm tra quỹ luôn đủ tiền, tổng sổ sách khớp, ao cá không bị rút mòn, quỹ thưởng nhiệm vụ chỉ giảm đúng bằng thưởng đã trả. Muốn chạy rộng hơn: `FUZZ_SEEDS=1,2,…,20 FUZZ_STEPS=250 npx hardhat test test/invariants.test.js`.
+- `npm run test:fork`: chạy trên bản sao Fuji, với đúng các contract đang deploy.
+- `npm run test:mainnet-fork`: diễn tập mainnet trên bản sao C-Chain, với USDC thật, Aave v3 thật và Chainlink thật, không tốn tiền thật. Xem [docs/MAINNET.md](docs/MAINNET.md).
+- CI (GitHub Actions) chạy test, một vòng trả gas hộ từ đầu đến cuối trên chain cục bộ, và Slither (dừng nếu có lỗi mức cao).
+
 ## Lịch sử: bản Game L1
 
 Bản đầu tiên dùng Farm L1 riêng và ICM (Teleporter) giữa L1 và Fuji. Thư L1 → Fuji đã chạy thật, nhưng hạ tầng testnet managed gặp lỗi: relayer managed không chạy, và node L1 ngừng ra block khi có thư Fuji → L1. Theo góp ý của mentor, dự án chuyển sang Fuji C-Chain cùng fee manager. Chi tiết và mã nguồn bản L1 xem [docs/L1-ARCHIVE.md](docs/L1-ARCHIVE.md).

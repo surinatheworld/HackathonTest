@@ -30,7 +30,8 @@
     "deploy:quests": "hardhat run scripts/deploy-quests.js --network fuji",
     "fund:relayers": "node scripts/fund-relayers.js",
     "multisig:deploy": "hardhat run scripts/deploy-multisig.js --network fuji",
-    "multisig:handover": "hardhat run scripts/multisig-handover.js --network fuji"
+    "multisig:handover": "hardhat run scripts/multisig-handover.js --network fuji",
+    "test:mainnet-fork": "node -e \"process.env.FORK_MAINNET=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'test','test/fork/mainnet.fork.js'],{stdio:'inherit',env:process.env})\""
   },
   "license": "MIT",
   "type": "commonjs",

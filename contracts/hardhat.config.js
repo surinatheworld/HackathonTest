@@ -16,7 +16,15 @@ module.exports = {
   },
   networks: {
     // FORK_FUJI=1 npm run test:fork  → runs test/fork/*.js against the live Fuji deployment.
-    hardhat: process.env.FORK_FUJI
+    // FORK_MAINNET=1 npm run test:mainnet-fork → rehearses the mainnet setup (real USDC, Aave v3, Chainlink) on a
+    // local copy of Avalanche C-Chain. Nothing is sent to mainnet and no real money is used.
+    hardhat: process.env.FORK_MAINNET
+      ? {
+          chainId: 43114,
+          forking: { url: process.env.MAINNET_RPC_URL || "https://api.avax.network/ext/bc/C/rpc" },
+          chains: { 43114: { hardforkHistory: { cancun: 0 } } },
+        }
+      : process.env.FORK_FUJI
       ? {
           chainId: 43113,
           forking: { url: process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc" },
