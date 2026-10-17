@@ -30,6 +30,10 @@ async function main() {
   }
   if (d.items) await verify("FarmItems", d.items, [d.forwarder, d.game, d.coop, d.pond]);
   if (d.quests) await verify("FarmQuests", d.quests, [d.forwarder, d.game, d.coop, d.pond, d.items, d.usdc]);
+  if (d.multisig) {
+    const ms = await hre.ethers.getContractAt("FarmMultisig", d.multisig);
+    await verify("FarmMultisig", d.multisig, [await ms.owners(), await ms.threshold()]);
+  }
   console.log(`Xem: https://testnet.snowtrace.io/address/${d.game}#code`);
 }
 

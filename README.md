@@ -67,7 +67,7 @@ Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md))
 | MockYieldSource | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
 | DemoPriceFeed | [`0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B`](https://testnet.snowtrace.io/address/0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B#code) |
 | Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
-| Ví trả gas của fee manager | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC` |
+| Ví trả gas của fee manager (4 ví) | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, `0x9D6Da18ec4bED6Bf3Cd5541e46e7b7f3E2f9Be10`, `0xc562Ac2a6686F84129Fe5f7b816a462FD3f577cf`, `0xA5Afe2e6DFe5b9D8E988B605C3db15DCf81f81d9` |
 
 Lúc deploy:
 - Quỹ thưởng có 50.000 USDC, trong đó 40.000 USDC gửi vào nguồn lãi.
@@ -82,6 +82,13 @@ Lúc deploy:
 - Quản gia AI (`npm run butler:demo`): gửi 50 USDC trong hạn mức ([tx](https://testnet.snowtrace.io/tx/0xb8e728ab9b493ce37daa05e0b6dfebb189575bdb8b061c815a0b5bfb6a82a55f)). Ba lệnh do prompt injection bị contract chặn: `CallNotAllowed`, `ArgumentNotAllowed`, `DailyCapExceeded`.
 
 Các bản trước vẫn còn trên Fuji, xem `contracts/deployments/fuji-gasless.json` trong `git log`.
+
+### Ai giữ quyền với tiền chung
+
+- **FarmMultisig (2/3)** là ví chung của 3 thành viên: muốn đổi gì ở quỹ thưởng, nguồn lãi, Hợp tác xã, quỹ thưởng nhiệm vụ hay chợ đồ thì phải có 2 người đồng ý (một người đề xuất `submit`, người thứ hai `confirm`, rồi `execute`). Mất một chìa khóa thì 2 người còn lại thay được (`replaceOwner`).
+- Cách bật: `MULTISIG_OWNERS=<ví 1>,<ví 2>,<ví 3> npm run multisig:deploy`, xem trước bằng `npm run multisig:handover`, rồi chạy lại với `CONFIRM=1` để chuyển quyền FarmGame, FarmCoop, FarmQuests, FarmItems sang multisig. Chỉ cần địa chỉ ví công khai, không bao giờ cần khóa riêng của ai.
+- DemoPriceFeed (giá giả cho màn "hạn hán") vẫn do ví deploy giữ vì nó không giữ tiền. Hợp tác xã chỉ nghe theo nó khi multisig gọi `setOracle`, nên muốn bật màn hạn hán vẫn cần 2 người.
+- Fee manager trả gas bằng 4 ví (1 ví chính và 3 ví con sinh ra từ cùng khóa bí mật trên Cloudflare). Mỗi người chơi dính với một ví, nên nhiều người bấm cùng lúc không tranh nhau nonce. Mỗi ví người chơi được trả gas tối đa 40 lần/phút và 500 lần/ngày, mỗi IP 300 lần/phút. Nạp thêm AVAX test cho các ví: `npm run fund:relayers`.
 
 ## Cấu trúc
 

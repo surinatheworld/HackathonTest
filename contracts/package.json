@@ -28,7 +28,9 @@
     "deploy:items": "hardhat run scripts/deploy-items.js --network fuji",
     "smoke:items": "node scripts/items-smoke.js",
     "deploy:quests": "hardhat run scripts/deploy-quests.js --network fuji",
-    "fund:relayers": "node scripts/fund-relayers.js"
+    "fund:relayers": "node scripts/fund-relayers.js",
+    "multisig:deploy": "hardhat run scripts/deploy-multisig.js --network fuji",
+    "multisig:handover": "hardhat run scripts/multisig-handover.js --network fuji"
   },
   "license": "MIT",
   "type": "commonjs",
