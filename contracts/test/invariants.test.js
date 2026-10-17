@@ -44,6 +44,7 @@ async function setup() {
   await usdc.approve(game, ethers.MaxUint256);
   await game.fundRewards(U(5_000));
   await game.setYieldSource(source);
+  await usdc.transfer(source, U(500)); // interest reserve
   await usdc.approve(coop, ethers.MaxUint256);
   await coop.fund(U(20_000));
   await usdc.approve(pond, ethers.MaxUint256);

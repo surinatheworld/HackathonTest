@@ -47,6 +47,8 @@ async function main() {
   console.log("Quest reward pool 20,000 USDC (rewards are paid from it, never minted)");
   await send(usdc.approve(game.target, U(50000)));
   await send(game.fundRewards(U(50000)));
+  await send(usdc.mint(me.address, U(100000)));
+  await send(usdc.transfer(yieldSource.target, U(100000))); // interest reserve: the mock pays from it, never mints
   await send(game.setYieldSource(yieldSource.target));
   await send(game.invest(U(40000)));
   console.log("Reward pool 50,000 USDC (40,000 in MockYieldSource at 5%)");

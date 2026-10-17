@@ -5,12 +5,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IYieldSource} from "./IYieldSource.sol";
 
-interface IMintable {
-    function mint(address to, uint256 amount) external;
-}
-
-/// Testnet stand-in for a lending market (Aave, Benqi): pays a fixed APR, counted in game days, by minting
-/// test USDC. On mainnet the game would point at AaveV3YieldSource instead; FarmGame does not change.
+/// Testnet stand-in for Aave v3's USDC supply market: pays a fixed APR (counted in game days) that mirrors what Aave
+/// pays on mainnet. The interest comes from an interest reserve the team funds up front with a plain transfer, never
+/// from minting: once the reserve is used up, the source stops paying interest and principal stays whole.
+/// On mainnet the game points at AaveV3YieldSource instead (rehearsed in test/fork/mainnet.fork.js).
 contract MockYieldSource is IYieldSource {
     using SafeERC20 for IERC20;
 
@@ -59,8 +57,6 @@ contract MockYieldSource is IYieldSource {
             earned -= amount;
         }
         emit Withdrawn(amount, principal);
-        uint256 held = asset.balanceOf(address(this));
-        if (held < amount) IMintable(address(asset)).mint(address(this), amount - held);
         asset.safeTransfer(msg.sender, amount);
     }
 
@@ -68,8 +64,16 @@ contract MockYieldSource is IYieldSource {
         return principal + earned + _pending();
     }
 
+    /// USDC the team put aside to pay interest that has not been earned yet.
+    function interestReserve() public view returns (uint256) {
+        uint256 held = asset.balanceOf(address(this));
+        return held > principal + earned ? held - principal - earned : 0;
+    }
+
     function _pending() private view returns (uint256) {
-        return (principal * aprBps * (block.timestamp - last)) / (BPS * YEAR_DAYS * dayLength);
+        uint256 due = (principal * aprBps * (block.timestamp - last)) / (BPS * YEAR_DAYS * dayLength);
+        uint256 left = interestReserve();
+        return due < left ? due : left;
     }
 
     function _accrue() private {

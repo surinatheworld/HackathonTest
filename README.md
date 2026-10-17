@@ -26,7 +26,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - Ruộng rau: cho vay 4%/năm.
   - Vườn cây: khóa 7/30/90 ngày game với lãi 6/9/14%.
   - Vòng chơi: tưới, chuỗi ngày, gom và trộm điểm mùa. Chỉ ví đang có cây mới được trộm, nên ví ảo tạo ra hàng loạt không cày được điểm qua fee manager.
-  - Nguồn lãi: tiền nhàn rỗi được gửi vào một `IYieldSource` (trên Fuji là `MockYieldSource`, trên mainnet là `AaveV3YieldSource`). `harvestYield()` chuyển phần lãi kiếm được vào quỹ thưởng.
+  - Nguồn lãi: tiền nhàn rỗi được gửi vào một `IYieldSource` (trên Fuji là `MockYieldSource`, mô phỏng lãi gửi USDC của Aave v3 và trả lãi từ quỹ lãi nạp sẵn, không in thêm token; trên mainnet là `AaveV3YieldSource`). `harvestYield()` chuyển phần lãi kiếm được vào quỹ thưởng.
   - Mọi hàm dùng `_msgSender()`, nên chạy được cả khi gửi trực tiếp lẫn khi gửi qua fee manager.
 - **FarmCoop** (Hợp tác xã): gửi gAVAX làm thế chấp, vay USDC tối đa 60% giá trị theo giá **Chainlink AVAX/USD** trên Fuji, lãi vay 8%/năm. Khi nợ vượt 75% giá trị, bất kỳ ai cũng có thể trả nợ thay và nhận gAVAX kèm 10% phạt. Giá cũ hơn 2 ngày thì không cho vay.
 - **FarmPond** (Ao cá và Chợ phiên): pool x·y = k USDC/gAVAX, phí 0,3% chia cho người thả cá. `zapIn`/`zapOut` cho người chỉ có USDC. Impermanent loss trong game là thật.
@@ -66,7 +66,8 @@ Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md))
 | FarmQuests | [`0x3dcB3f38689f992923E5D479eB25E4b8B8aCE3eb`](https://testnet.snowtrace.io/address/0x3dcB3f38689f992923E5D479eB25E4b8B8aCE3eb#code) |
 | FarmItems | [`0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174`](https://testnet.snowtrace.io/address/0xB107d3bCDc1531d2fC4D1E6bE742f4486cc94174#code) |
 | ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
-| MockYieldSource | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
+| MockYieldSource (bản cũ, tự mint lãi) | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
+| MockYieldSource (bản mới, trả lãi từ quỹ 100.000 USDC) | [`0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec`](https://testnet.snowtrace.io/address/0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec#code), chờ owner chuyển FarmGame sang (`npm run migrate:yield`) |
 | DemoPriceFeed | [`0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B`](https://testnet.snowtrace.io/address/0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B#code) |
 | Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
 | Ví trả gas của fee manager (4 ví) | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, `0x9D6Da18ec4bED6Bf3Cd5541e46e7b7f3E2f9Be10`, `0xc562Ac2a6686F84129Fe5f7b816a462FD3f577cf`, `0xA5Afe2e6DFe5b9D8E988B605C3db15DCf81f81d9` |
@@ -152,7 +153,7 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 1. **Why on-chain?** Tiền nằm trong contract và chỉ chủ ví điều khiển được bằng chữ ký. Quản gia AI bị giới hạn bằng contract, không phải bằng lời hứa.
 2. **Why Avalanche?** C-Chain finality dưới 2 giây và phí rất thấp, nên fee manager trả gas cho cả những thao tác nhỏ như tưới cây. Người chơi mới không cần biết gas là gì, và game lên mobile được.
 3. **Tiền từ đâu?**
-   - Lãi từ thị trường cho vay: FarmGame gửi tiền nhàn rỗi vào `IYieldSource`. Trên Fuji là bản mock, trên mainnet là adapter Aave v3 đã viết sẵn và có test.
+   - Lãi từ thị trường cho vay: FarmGame gửi tiền nhàn rỗi vào `IYieldSource`. Trên Fuji là bản mô phỏng lãi Aave v3, trả từ quỹ lãi nạp sẵn chứ không in thêm token. Trên mainnet là adapter Aave v3, đã diễn tập trên bản sao mainnet với Aave thật (`npm run test:mainnet-fork`).
    - Phí 0,3% của Ao cá trả cho người thả cá.
    - Lãi vay 8% ở Hợp tác xã.
    - Quỹ tài trợ mùa vụ.

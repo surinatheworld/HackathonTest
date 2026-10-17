@@ -218,6 +218,8 @@ describe("FarmGame hardening and real yield", () => {
     const src = await (await ethers.getContractFactory("MockYieldSource")).deploy(token, game, 500, DAY);
     await expect(game.connect(alice.connect(ethers.provider)).setYieldSource.staticCall(src)).to.be.reverted;
     await game.connect(owner).setYieldSource(src);
+    await token.mint(owner, usdc(1_000));
+    await token.connect(owner).transfer(src, usdc(1_000)); // interest reserve: the source pays from it, never mints
     await fundPlayer(alice);
     await relay(alice, game, "deposit", [usdc(1_000)]);
     const idle = await token.balanceOf(game);
@@ -232,6 +234,24 @@ describe("FarmGame hardening and real yield", () => {
     await relay(alice, game, "withdraw", [usdc(1_000)]);
     expect((await token.balanceOf(alice.address)) - before).to.equal(usdc(1_000));
     expect(await game.invested()).to.be.lt(idle);
+  });
+
+  it("the testnet yield source never mints: interest stops when its reserve runs out, principal stays whole", async () => {
+    const { owner, token, game } = await deploy();
+    const src = await (await ethers.getContractFactory("MockYieldSource")).deploy(token, game, 500, DAY);
+    await game.connect(owner).setYieldSource(src);
+    await token.mint(owner, usdc(10));
+    await token.connect(owner).transfer(src, usdc(10));
+    const idle = await token.balanceOf(game);
+    await game.connect(owner).invest(idle);
+    const supply = await token.totalSupply();
+    await time.increase(10 * 365 * DAY);
+    expect(await src.balance()).to.equal(idle + usdc(10));
+    await game.harvestYield();
+    await game.connect(owner).divest(await game.invested());
+    expect(await token.totalSupply()).to.equal(supply);
+    expect(await src.interestReserve()).to.equal(0n);
+    expect(await token.balanceOf(src)).to.equal(0n);
   });
 
   it("the Aave v3 adapter supplies, reports aToken growth, and withdraws for the game", async () => {
