@@ -75,7 +75,19 @@ const until = (test, ms = 120_000) =>
     state.waiters.push((s) => (test(s) ? (clearTimeout(timer), resolve(s), true) : false));
   });
 
-const embedded = (s) => s.wallets.find((w) => w.walletClientType === "privy");
+const isPrivy = (t) => typeof t === "string" && t.startsWith("privy");
+const lower = (a) => String(a || "").toLowerCase();
+/** The user's embedded Ethereum wallets as recorded on their Privy account, oldest first. */
+const linkedWallets = (s) =>
+  (s.privy?.user?.linkedAccounts || [])
+    .filter((a) => a.type === "wallet" && (isPrivy(a.walletClientType) || a.connectorType === "embedded") && (a.chainType || "ethereum") === "ethereum")
+    .sort((a, b) => new Date(a.firstVerifiedAt || a.verifiedAt || 0) - new Date(b.firstVerifiedAt || b.verifiedAt || 0));
+/** Always the same wallet for the same account: the oldest embedded wallet, once its provider has loaded. */
+const embedded = (s) => {
+  const first = linkedWallets(s)[0];
+  if (first) return s.wallets.find((w) => lower(w.address) === lower(first.address)) || null;
+  return s.wallets.find((w) => isPrivy(w.walletClientType)) || null;
+};
 
 export async function connect() {
   await until((s) => s.privy?.ready);
@@ -87,10 +99,11 @@ export async function connect() {
     if (!state.privy.authenticated) throw new Error("Bạn đã đóng cửa sổ đăng nhập Privy.");
   }
   await until((s) => s.walletsReady);
-  // The dashboard may have "create on login" off; then make the embedded wallet here, once per user.
-  if (!embedded(state)) {
-    const has = state.privy.user?.linkedAccounts?.some((a) => a.type === "wallet" && a.walletClientType === "privy");
-    if (!has) await state.createWallet();
+  // Privy creates the wallet on login (createOnLogin) and its provider loads a moment later. Creating one here
+  // as well made a second wallet, so only do it when the account still has none after Privy had time to act.
+  if (!linkedWallets(state).length) {
+    await until((s) => linkedWallets(s).length > 0, 8_000).catch(() => {});
+    if (!linkedWallets(state).length) await state.createWallet();
   }
   await until((s) => embedded(s), 60_000);
   const wallet = embedded(state);
