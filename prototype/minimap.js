@@ -764,7 +764,7 @@
   var dest = { on: false, x: 0, y: 0 };
   var walkPt = { x: 0, y: 0 };
 
-  function loadCollapsed() { try { return win.localStorage && localStorage.getItem(LS_KEY) === '1'; } catch (e) { return false; } }
+  function loadCollapsed() { try { return !!(win.localStorage && localStorage.getItem(LS_KEY) === '1'); } catch (e) { return false; } }
   function saveCollapsed(v) { try { if (win.localStorage) localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) { /* private mode */ } }
 
   /* ---------- layout ---------- */
@@ -851,7 +851,8 @@
     var resized = lay.cw !== cw || lay.phone !== phone;
     lay.phone = phone; lay.cw = cw; lay.ch = ch; lay.x = x; lay.y = y; lay.rw = rw; lay.pad = pad; lay.headH = headH;
     lay.away = away; lay.anchor = anchor; lay.collapsed = collapsed;
-    if (resized) { sizeMini(); placePins(); }
+    /* a pending rebuild (resize / new static layer) is done once on the next frame instead of per event */
+    if (resized) { if (!needRebuild) sizeMini(); placePins(); }
     if (!animate) { void root.offsetWidth; root.classList.add('mm-anim'); }
     lay.ready = true;
     if (miniV.hover) showMiniTip(miniV.hover);
@@ -1245,7 +1246,7 @@
       pollAcc += dt;
       if (pollAcc >= POLL_DT) { pollAcc = 0; poll(); }
       if (needRebuild) {
-        needRebuild = false; miniV.stale = true; bigV.stale = true; legK = 0;
+        needRebuild = false; miniV.stale = true; bigV.stale = true; legK = 0; lastDpr = dprNow();
         sizeMini();
         if (bigOpen) { drawLegendIcons(); layoutBig(); }
       }
@@ -1294,7 +1295,7 @@
 
     F.on('frame', onFrame);
     F.on('world', onWorld);
-    F.on('resize', function () { needRebuild = true; place(false); if (bigOpen) layoutBig(); });
+    F.on('resize', function () { needRebuild = true; place(false); });
     F.on('open', function () { place(true); miniV.dirty = true; });
     F.on('close', function () { place(true); miniV.dirty = true; });
     F.on('tx', function (o) {
