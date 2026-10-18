@@ -7,14 +7,14 @@ Fee manager là file `functions/api/relay.js`. Cloudflare Pages tự nhận thư
 1. Mở dashboard Cloudflare → **Workers & Pages** → project **hanazono** → **Settings** → **Variables and Secrets** (hoặc **Environment variables**).
 2. Ở môi trường **Production**, bấm **Add** và chọn loại **Secret** (Encrypt):
    - Variable name: `RELAYER_PRIVATE_KEY`
-   - Value: khóa riêng của ví trả gas `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, là dòng `RELAYER_PRIVATE_KEY=` trong `contracts/.env`. Đây là ví testnet, chỉ giữ AVAX trả gas. **Không bao giờ** đưa `PRIVATE_KEY` (ví deploy, ví duy nhất in được tiền test) lên Cloudflare.
+   - Value: khóa riêng của ví trả gas, là dòng `RELAYER_PRIVATE_KEY=` trong `contracts/.env`. Đây là ví testnet, chỉ giữ AVAX trả gas. **Không bao giờ** đưa `PRIVATE_KEY` (ví deploy, ví duy nhất in được tiền test) lên Cloudflare.
 3. (Không bắt buộc) Thêm biến thường `FUJI_RPC_URL` nếu muốn dùng RPC khác RPC công khai.
 4. Vào **Deployments**, bấm **Retry deployment** trên bản mới nhất, hoặc push một commit bất kỳ, để Pages nạp biến mới.
-5. Kiểm tra: mở https://hanazono-b9s.pages.dev/api/relay. Phải thấy `"ready": true` và địa chỉ `0x2683…f4FC`.
+5. Kiểm tra: mở https://hanazono-b9s.pages.dev/api/relay. Phải thấy `"ready": true` và địa chỉ ví trả gas.
 
 Khi chưa có secret: người chơi dùng **MetaMask** vẫn chơi được, game tự chuyển sang tự trả gas. **Ví trong game** thì sẽ báo "Fee manager chưa bật".
 
-**Nạp gas cho fee manager:** `npm run fund:relayers` (ví deploy nạp cho các ví trả gas có trong `relay-config.js`), hoặc gửi AVAX test (Fuji) vào `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`. Phí trên Fuji rất thấp nên 0,3 AVAX đủ cho rất nhiều lượt.
+**Nạp gas cho fee manager:** `npm run fund:relayers` (ví deploy nạp cho các ví trả gas có trong `relay-config.js`), hoặc gửi AVAX test (Fuji) vào ví trả gas (địa chỉ hiện ở `/api/relay`). Phí trên Fuji rất thấp nên 0,3 AVAX đủ cho rất nhiều lượt.
 
 **Chính sách của fee manager** (`functions/_lib/relay-core.js`):
 - Chỉ trả gas cho hàm người chơi trên FarmGame, FarmCoop, FarmPond, GaslessUSDC và GaslessAVAX. Hàm owner như `invest`, `setOracle` thì owner tự trả gas.

@@ -21,12 +21,12 @@ TeleporterMessenger có cùng địa chỉ `0x253b2784c75e510dD0fF1da844684a1aC0
 
 ## Cách nhanh nhất: deploy bằng ví của bạn trên web
 
-Mở **https://hanazono-b9s.pages.dev/deploy.html**, kết nối Core/MetaMask bằng ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`, rồi bấm lần lượt:
+Mở **https://hanazono-b9s.pages.dev/deploy.html**, kết nối Core/MetaMask bằng ví dự án, rồi bấm lần lượt:
 
 1. **Deploy lên Fuji**: MockUSDC, FarmVault (nạp 50.000 USDC test vào quỹ thưởng), ButlerAccount và 3 rule. Khoảng 9 lần ký, tốn 0,1–0,2 AVAX.
 2. **Farm L1**: điền RPC URL và Chain ID từ My L1 Dashboard, bấm **Kiểm tra L1** (kiểm tra RPC, chainId và TeleporterMessenger), rồi **Deploy FarmLand**.
 3. **Nối hai chain**: 2 lần ký `setRemote`.
-4. **Quản gia AI**: cấp session key cho ví agent (mặc định `0x6fC6866A2bcD264ABd80640D72659d0336A1550c`, khóa nằm trong `contracts/.env` của nhóm) với hạn mức 200 USDC/ngày, nạp 500 USDC test vào ButlerAccount, và gửi 0,1 AVAX làm gas cho agent. Nút **Thu hồi ngay** là kill switch.
+4. **Quản gia AI**: cấp session key cho ví agent (khóa nằm trong `contracts/.env` của nhóm) với hạn mức 200 USDC/ngày, nạp 500 USDC test vào ButlerAccount, và gửi 0,1 AVAX làm gas cho agent. Nút **Thu hồi ngay** là kill switch.
 
 Ví bạn là deployer và owner của mọi contract. Trang không bao giờ hỏi private key. Tiến trình được lưu trong trình duyệt: đóng trang giữa chừng thì mở lại và bấm tiếp, các bước đã xong sẽ tự bỏ qua. Mới xong Fuji thì game đã chơi on-chain được Ruộng rau trên trình duyệt đó.
 
@@ -34,7 +34,7 @@ Ví bạn là deployer và owner của mọi contract. Trang không bao giờ h�
 
 ```bash
 cd contracts
-npm run sync-config -- 0x54A2276F134d3Cfaa7572BC326092fABa6352888 --l1-rpc <RPC URL của Farm L1>
+npm run sync-config -- <địa chỉ ví dự án> --l1-rpc <RPC URL của Farm L1>
 ```
 
 Sau đó, cũng trong `contracts/`:

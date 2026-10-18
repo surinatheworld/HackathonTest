@@ -9,7 +9,7 @@
   - gAVAX có 18 chữ số thập phân.
   - Giá có 8 chữ số thập phân, giống feed Chainlink.
   - Điểm mùa (`points`, `ripePoints`) là số nguyên, không có phần thập phân.
-- **Người chơi**: mọi giao dịch đi qua fee manager nên `tx.from` là ví trả gas `0x2683…f4FC`, không phải người chơi. Luôn lấy địa chỉ người chơi từ **tham số của event**.
+- **Người chơi**: mọi giao dịch đi qua fee manager nên `tx.from` là ví trả gas, không phải người chơi. Luôn lấy địa chỉ người chơi từ **tham số của event**.
 - **Ngày game**: `day = floor(block.timestamp / dayLength)`, với `dayLength` lấy trong `chain-config.js` (hiện là 60 giây).
 - **Đọc log trên Fuji**:
   - RPC công khai `api.avax-test.network` chỉ cho `eth_getLogs` **tối đa 100 block mỗi lần**, tức khoảng 3 phút. Dùng nó để đọc bám theo block mới.
