@@ -43,7 +43,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
 - **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy). Thưởng trả từ quỹ thưởng 20.000 USDC nạp sẵn trong contract, không in thêm token. Hết quỹ thì người chơi vẫn qua nhiệm vụ tiếp theo, phần thưởng được ghi nợ và nhận sau bằng `claimOwed()` khi đội nạp thêm. Chỉ ví người chơi mới nhận thưởng được (contract thì không), nên không ai tạo hàng loạt "người chơi ảo" trong một giao dịch để rút quỹ. Mỗi lần nhận thưởng tốn cùng một lượng gas dù người chơi đã chơi bao lâu: contract chỉ xem đúng một bản ghi (`complete(hint)`), không quét lịch sử.
   - Mở khoá lần lượt. Contract tự kiểm tra trên chain là người chơi đã làm thật.
   - Thưởng USDC test tăng dần từ 10 đến 200, tổng 760. Lên mainnet thì thưởng đổi sang điểm hoặc đồ trang trí, không trả tiền thật.
-  - Có owner (hiện là ví deploy `0x2683…f4FC`). Owner chỉ rút được thưởng chưa dùng (`withdrawPool`), không sửa được tiến độ hay phần thưởng đang nợ của ai.
+  - Có owner (ví dự án `0x54A2…2888`). Owner chỉ rút được thưởng chưa dùng (`withdrawPool`), không sửa được tiến độ hay phần thưởng đang nợ của ai.
 - **USDC và gAVAX test**: chỉ ví deploy in được (để nạp các quỹ). Người chơi nhận từ vòi (faucet), mỗi ví 1 lần mỗi giờ, và chỉ ví người chơi mới nhận được.
 - **Tặng tiền test**: người chơi tặng USDC hoặc gAVAX test cho bạn bè ngay trong game, không mất phí.
 - **FarmForwarder**: `ERC2771Forwarder` của OpenZeppelin. Kiểm tra chữ ký, nonce (chống phát lại) và hạn của request.
@@ -59,34 +59,35 @@ Event của mọi contract (cho indexer và bot) xem [docs/EVENTS.md](docs/EVENT
 
 ## Đã deploy trên Fuji C-Chain
 
-Bản thứ tư, deploy lại toàn bộ ngày 18/10/2026 sau vòng soát lỗi có giám khảo (xem [Soát lỗi chéo](#soát-lỗi-chéo)). Owner của FarmGame, FarmCoop, FarmItems và ButlerAccount là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
+Bản thứ năm, deploy lại toàn bộ ngày 18/10/2026 sau vòng 3 soát lỗi có giám khảo (xem [Soát lỗi chéo](#soát-lỗi-chéo)), bằng ví deploy mới `0xF858A1933eb0d7bCa9cd601795304A914bf89ceF` tách khỏi các ví trả gas. Owner của FarmGame, FarmCoop, FarmItems, FarmQuests và ButlerAccount là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
 
 | Contract | Địa chỉ |
 |---|---|
-| FarmGame | [`0x9ba50801058eB32D42c8280BDB2173eF26FB18C6`](https://testnet.snowtrace.io/address/0x9ba50801058eB32D42c8280BDB2173eF26FB18C6#code) |
-| FarmCoop | [`0xb1D9789fF1ABa5714eF02bD40c7E224aC8Ad9a82`](https://testnet.snowtrace.io/address/0xb1D9789fF1ABa5714eF02bD40c7E224aC8Ad9a82#code) |
-| FarmPond | [`0xACc9cceC46092dcD835fB71B9baA31cf10526E25`](https://testnet.snowtrace.io/address/0xACc9cceC46092dcD835fB71B9baA31cf10526E25#code) |
-| GaslessUSDC | [`0x5c7a98a7d5d1c9411B068A484772c66dF43a914C`](https://testnet.snowtrace.io/address/0x5c7a98a7d5d1c9411B068A484772c66dF43a914C#code) |
-| GaslessAVAX (gAVAX) | [`0x5dF6787f075A63BF89eCd123bfa81a4A11c3F8DA`](https://testnet.snowtrace.io/address/0x5dF6787f075A63BF89eCd123bfa81a4A11c3F8DA#code) |
-| FarmForwarder | [`0x7F70e614DB5bAA30F448A15D00ACB0836D538D0e`](https://testnet.snowtrace.io/address/0x7F70e614DB5bAA30F448A15D00ACB0836D538D0e#code) |
-| FarmQuests | [`0x5e7f4810fBA4581fc5ee6c6f74434cD7279bFFC4`](https://testnet.snowtrace.io/address/0x5e7f4810fBA4581fc5ee6c6f74434cD7279bFFC4#code) |
-| FarmItems | [`0x169519F6CBE50C86b673e07d3077fc2A9785e047`](https://testnet.snowtrace.io/address/0x169519F6CBE50C86b673e07d3077fc2A9785e047#code) |
-| ButlerAccount | [`0xBE8cDdC304aac6013470E2E4532206dB8D207eF6`](https://testnet.snowtrace.io/address/0xBE8cDdC304aac6013470E2E4532206dB8D207eF6#code) |
-| MockYieldSource (trả lãi từ quỹ 100.000 USDC, không in thêm) | [`0x9Df49DD2f454aB9ec65eda59501b1ab605b525bC`](https://testnet.snowtrace.io/address/0x9Df49DD2f454aB9ec65eda59501b1ab605b525bC#code) |
-| DemoPriceFeed | [`0x3B4Bd58fa455B72a93919758C847B844E98748F5`](https://testnet.snowtrace.io/address/0x3B4Bd58fa455B72a93919758C847B844E98748F5#code) |
+| FarmGame | [`0x7B15cA22181fB2Af2Ff917029aac7c2762E00de7`](https://testnet.snowtrace.io/address/0x7B15cA22181fB2Af2Ff917029aac7c2762E00de7#code) |
+| FarmCoop | [`0xb5d5Dc33fEa8F1039a2Aad494fFfeE8E66FA6b1f`](https://testnet.snowtrace.io/address/0xb5d5Dc33fEa8F1039a2Aad494fFfeE8E66FA6b1f#code) |
+| FarmPond | [`0x221FAcc3c67b3CC27C6201420b391a3a56037EdD`](https://testnet.snowtrace.io/address/0x221FAcc3c67b3CC27C6201420b391a3a56037EdD#code) |
+| GaslessUSDC | [`0xaB3BC36C05cE1f2660358A6ce1936eB76E7fC0a8`](https://testnet.snowtrace.io/address/0xaB3BC36C05cE1f2660358A6ce1936eB76E7fC0a8#code) |
+| GaslessAVAX (gAVAX) | [`0x932Ca0f7D0f804f40D68e098925E3d1D5bc71Bf4`](https://testnet.snowtrace.io/address/0x932Ca0f7D0f804f40D68e098925E3d1D5bc71Bf4#code) |
+| FarmForwarder | [`0x7712F60E50a910717167DBd6136CBEc05e55F798`](https://testnet.snowtrace.io/address/0x7712F60E50a910717167DBd6136CBEc05e55F798#code) |
+| FarmQuests | [`0xDC24c3709D330652130F7692E6b46673DcbDbCd8`](https://testnet.snowtrace.io/address/0xDC24c3709D330652130F7692E6b46673DcbDbCd8#code) |
+| FarmItems | [`0x3B00C43b50abCea3da10D011f615A86CBEDcA387`](https://testnet.snowtrace.io/address/0x3B00C43b50abCea3da10D011f615A86CBEDcA387#code) |
+| ButlerAccount | [`0xba5201E9De888356612E508ECEB5F4563e8E2fb7`](https://testnet.snowtrace.io/address/0xba5201E9De888356612E508ECEB5F4563e8E2fb7#code) |
+| MockYieldSource (trả lãi từ quỹ 100.000 USDC, không in thêm) | [`0xE3ce94DF448fDFc86d1aaD313ae0dE5e5cF48d5B`](https://testnet.snowtrace.io/address/0xE3ce94DF448fDFc86d1aaD313ae0dE5e5cF48d5B#code) |
+| DemoPriceFeed | [`0xA6125D51a1BF1C8a1deaa3d1cFC358aad1BA7A75`](https://testnet.snowtrace.io/address/0xA6125D51a1BF1C8a1deaa3d1cFC358aad1BA7A75#code) |
 | Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
 | Ví trả gas của fee manager (4 ví) | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, `0x9D6Da18ec4bED6Bf3Cd5541e46e7b7f3E2f9Be10`, `0xc562Ac2a6686F84129Fe5f7b816a462FD3f577cf`, `0xA5Afe2e6DFe5b9D8E988B605C3db15DCf81f81d9` |
 
 Lúc deploy:
 - Quỹ thưởng có 50.000 USDC, trong đó 40.000 USDC gửi vào nguồn lãi.
 - Hợp tác xã có 50.000 USDC để cho vay.
-- Ao cá có 20.000 USDC và 2.044,4 gAVAX, theo giá Chainlink lúc đó là $9,78.
+- Ao cá có 20.000 USDC và 2.049,2 gAVAX, theo giá Chainlink lúc đó là $9,76.
 - Quỹ thưởng nhiệm vụ có 20.000 USDC. Nguồn lãi có quỹ lãi 100.000 USDC nạp sẵn.
 
 **Bằng chứng trên Fuji**: các link dưới đây do script tạo ra từ lần chạy thật trên đúng bản đang deploy, không sửa tay. Sau mỗi lần deploy lại: `npm run smoke:gasless`, `BUTLER_ONCHAIN_ATTACK=1 npm run butler:demo`, rồi `npm run proof:readme`.
 
 <!-- proof:start -->
-Chưa có bằng chứng cho bản này. Chạy `npm run smoke:gasless` và `npm run butler:demo`, rồi `npm run proof:readme`.
+- Một ví mới, 0 AVAX từ đầu đến cuối (`npm run smoke:gasless`, fee manager trả gas): nhận USDC test ([tx](https://testnet.snowtrace.io/tx/0x49f60c969d2fca6165fa3ae4d041b5ded9b7a609be52d3fa830302bca3c4fc05)), trồng 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xcc4e3d3a46daf958b3a01e1b2b9addee5084f52e48a715557b0de5ab2fa16701)), gửi 50 USDC vào Ruộng rau ([tx](https://testnet.snowtrace.io/tx/0xf64bbfd15c550088eeee61a810b82c206f38f1bfd7999c0fbdfe64daad40a7d2)), gửi 5 gAVAX ở Hợp tác xã ([tx](https://testnet.snowtrace.io/tx/0x6e816dc4e416760662d31e4715201fb33a3dcf22c3f76f2e708c125f1e79f1c0)), vay 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xdc8e89e98b3c89b3039f9c7c8a5b9bdf63205dffdf7ac44ebaaf6a07e005f4e4)), thả 100 USDC xuống Ao cá ([tx](https://testnet.snowtrace.io/tx/0x86f6c5037020199cbee71b67edf7190a67fc8b6a2f0f4fdeda81074eb946f798)).
+- Quản gia tự động (`npm run butler:demo`): quản gia gửi 50.0 USDC trong hạn mức ([tx](https://testnet.snowtrace.io/tx/0xd66984e7ae32d88cff148d0a25c692ea3dfc99bb87a1f8f79c28033489b384f7)), lệnh chuyển hết tiền cho kẻ lạ bị hợp đồng chặn ([tx](https://testnet.snowtrace.io/tx/0xfee4e6307090d9b01dd119d7a28a0f17939fbc56717f81d740482a9d0ada93b0)).
 <!-- proof:end -->
 
 - Fee manager từ chối `approve` tới ví lạ (HTTP 403), smoke test kiểm tra mỗi lần chạy.
@@ -96,7 +97,7 @@ Các bản trước vẫn còn trên Fuji, xem `contracts/deployments/fuji-gasle
 
 ### Ai giữ quyền với tiền chung
 
-Hôm nay quyền nằm ở hai ví, chưa có multisig. Bảng dưới là cách `npm run deploy:gasless` chia quyền từ Vòng 4; bản đang chạy trên Fuji vẫn để FarmQuests và DemoPriceFeed ở ví deploy `0x2683…f4FC`, cũng là ví trả gas số 0, cho tới lần deploy lại:
+Hôm nay quyền nằm ở hai ví, chưa có multisig: ví dự án `0x54A2…2888` và ví deploy `0xF858…9ceF` (chỉ dùng trên máy, không bao giờ để trên Cloudflare). Các ví trả gas của fee manager không giữ quyền nào:
 
 | Contract | Owner hôm nay | Owner làm được gì | Multisig |
 |---|---|---|---|
@@ -263,7 +264,7 @@ Ngày 18/10/2026, 3 agent AI soát độc lập (dòng tiền, quyền hạn, fe
 - **Chợ đổi đồ**: mỗi ví có danh sách đề nghị của mình và đề nghị gửi riêng cho mình, game đọc chúng trước, nên hàng trăm đề nghị rác không che được.
 - **An toàn trang web và script**: trình duyệt chỉ chạy script của game (Content-Security-Policy có `script-src`, script nội tuyến chỉ chạy đúng mã băm; sửa script thì chạy `npm run csp`). Các script gửi giao dịch chỉ chạy trên Fuji (kiểm tra chain 43113).
 
-**Còn phải làm (cần deploy lại):** FarmGame (vườn bác Tư), FarmQuests (trần chi thưởng), FarmItems (danh sách đề nghị theo ví), GaslessUSDC/GaslessAVAX/DemoPriceFeed (ví deploy mới, tách khỏi ví trả gas). Khi deploy lại, mọi số dư và tiến độ của người chơi trên bản cũ không chuyển sang. Trước khi deploy: tạo khóa deploy mới (`npm run wallet`), đổi khóa trả gas trên Cloudflare, đặt `RELAYER_ADDRESSES`. Sau khi deploy: chạy smoke test, demo quản gia, `npm run proof:readme`. Chưa sửa: thư viện Privy vẫn tải từ esm.sh chưa khóa phiên bản build, giới hạn tần suất của fee manager vẫn tính riêng theo từng trung tâm dữ liệu Cloudflare.
+**Đã deploy lại toàn bộ** cho vòng này (bản thứ năm), bằng ví deploy mới tách khỏi ví trả gas; số dư và tiến độ người chơi của bản trước không chuyển sang. Link bằng chứng ở trên lấy từ lần chạy thật trên bản này. Chưa sửa: thư viện Privy vẫn tải từ esm.sh chưa khóa phiên bản build, giới hạn tần suất của fee manager vẫn tính riêng theo từng trung tâm dữ liệu Cloudflare.
 
 ## Lịch sử: bản Game L1
 

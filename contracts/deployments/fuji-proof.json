@@ -1,0 +1,62 @@
+{
+  "forwarder": "0x7712F60E50a910717167DBd6136CBEc05e55F798",
+  "butler": "0xba5201E9De888356612E508ECEB5F4563e8E2fb7",
+  "steps": [
+    {
+      "step": "faucet()",
+      "text": "nhận USDC test",
+      "hash": "0x49f60c969d2fca6165fa3ae4d041b5ded9b7a609be52d3fa830302bca3c4fc05",
+      "contract": "0xaB3BC36C05cE1f2660358A6ce1936eB76E7fC0a8",
+      "ok": true
+    },
+    {
+      "step": "plant(cây ớt, 10 USDC)",
+      "text": "trồng 10 USDC",
+      "hash": "0xcc4e3d3a46daf958b3a01e1b2b9addee5084f52e48a715557b0de5ab2fa16701",
+      "contract": "0x7B15cA22181fB2Af2Ff917029aac7c2762E00de7",
+      "ok": true
+    },
+    {
+      "step": "deposit(50 USDC)",
+      "text": "gửi 50 USDC vào Ruộng rau",
+      "hash": "0xf64bbfd15c550088eeee61a810b82c206f38f1bfd7999c0fbdfe64daad40a7d2",
+      "contract": "0x7B15cA22181fB2Af2Ff917029aac7c2762E00de7",
+      "ok": true
+    },
+    {
+      "step": "depositCollateral(5 gAVAX)",
+      "text": "gửi 5 gAVAX ở Hợp tác xã",
+      "hash": "0x6e816dc4e416760662d31e4715201fb33a3dcf22c3f76f2e708c125f1e79f1c0",
+      "contract": "0xb5d5Dc33fEa8F1039a2Aad494fFfeE8E66FA6b1f",
+      "ok": true
+    },
+    {
+      "step": "borrow(10 USDC)",
+      "text": "vay 10 USDC",
+      "hash": "0xdc8e89e98b3c89b3039f9c7c8a5b9bdf63205dffdf7ac44ebaaf6a07e005f4e4",
+      "contract": "0xb5d5Dc33fEa8F1039a2Aad494fFfeE8E66FA6b1f",
+      "ok": true
+    },
+    {
+      "step": "zapIn(100 USDC)",
+      "text": "thả 100 USDC xuống Ao cá",
+      "hash": "0x86f6c5037020199cbee71b67edf7190a67fc8b6a2f0f4fdeda81074eb946f798",
+      "contract": "0x221FAcc3c67b3CC27C6201420b391a3a56037EdD",
+      "ok": true
+    },
+    {
+      "step": "butler-deposit",
+      "text": "quản gia gửi 50.0 USDC trong hạn mức",
+      "hash": "0xd66984e7ae32d88cff148d0a25c692ea3dfc99bb87a1f8f79c28033489b384f7",
+      "contract": "0xba5201E9De888356612E508ECEB5F4563e8E2fb7",
+      "ok": true
+    },
+    {
+      "step": "butler-blocked",
+      "text": "lệnh chuyển hết tiền cho kẻ lạ bị hợp đồng chặn",
+      "hash": "0xfee4e6307090d9b01dd119d7a28a0f17939fbc56717f81d740482a9d0ada93b0",
+      "contract": "0xba5201E9De888356612E508ECEB5F4563e8E2fb7",
+      "ok": false
+    }
+  ]
+}

@@ -23,5 +23,6 @@ window.FARM_CONFIG = {
     "chainlinkAvaxUsd": "0x5498BB86BC934c8D34FDA08E81D444153d0D06aD",
     "demoFeed": "0xA6125D51a1BF1C8a1deaa3d1cFC358aad1BA7A75",
     "neighbour": "0x18261B2508994fBA0A7307558164B5884d1AC296"
-  }
+  },
+  "butlerBlockedTx": "0xfee4e6307090d9b01dd119d7a28a0f17939fbc56717f81d740482a9d0ada93b0"
 };

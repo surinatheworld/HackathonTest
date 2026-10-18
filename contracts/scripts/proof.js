@@ -48,7 +48,7 @@ function renderProof(p, explorer = EXPLORER) {
 function applyProof({ readme = path.join(ROOT, "README.md"), config = path.join(ROOT, "prototype", "chain-config.js"), file = FILE } = {}) {
   const p = readProof(file);
   const md = fs.readFileSync(readme, "utf8");
-  const re = /(<!-- proof:start -->\n)[\s\S]*?(\n<!-- proof:end -->)/;
+  const re = /(<!-- proof:start -->\r?\n)[\s\S]*?(\r?\n<!-- proof:end -->)/; // CRLF on a Windows checkout
   if (!re.test(md)) throw new Error("README thiếu <!-- proof:start --> ... <!-- proof:end -->");
   fs.writeFileSync(readme, md.replace(re, (_, a, b) => a + renderProof(p) + b));
   const blocked = (p?.steps || []).find((s) => s.step === "butler-blocked" && isHash(s.hash));
