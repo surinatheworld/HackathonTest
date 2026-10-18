@@ -28,6 +28,10 @@ async function list(env, chainId, path, key, pages = PAGES) {
 
 const lc = (a) => (a || "").toLowerCase();
 const usd = (v) => Number(v) / 1e6;
+// The Data API is a third party: anything that is not a plain address or tx hash is dropped before the game puts
+// it into the page.
+const isAddr = (a) => /^0x[0-9a-f]{40}$/.test(a);
+const isHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
 
 function label(t, c) {
   const from = lc(t.from.address), to = lc(t.to.address), v = usd(t.value);
@@ -43,14 +47,18 @@ function label(t, c) {
   return null;
 }
 
-async function build(env, config) {
+export async function build(env, config) {
   const chainId = config.chainId;
   const c = Object.fromEntries(Object.entries(config).map(([k, v]) => [k, lc(String(v))]));
   // Not players: the farm contracts, the yield sources, and the team's own wallets (owner, multisig, butler,
   // fee manager pool, which is also the deployer). relay-config.js lists the extra ones under notPlayers.
   const contracts = new Set([c.game, c.coop, c.pond, c.quests, c.items, c.forwarder, c.usdc, c.gavax, c.butler].filter(Boolean));
   for (const a of config.notPlayers || []) contracts.add(lc(a));
-  if (env.RELAYER_PRIVATE_KEY) for (const k of relayerKeys(env)) contracts.add(lc(new ethers.Wallet(k).address));
+  // The fee manager's own wallets. Only their forwarder calls count as sponsored: anyone can call the forwarder
+  // directly with requests they signed themselves and pay their own gas, and that is not the game paying.
+  const pool = new Set((config.relayers || []).map(lc));
+  if (env.RELAYER_PRIVATE_KEY) for (const k of relayerKeys(env)) pool.add(lc(new ethers.Wallet(k).address));
+  for (const a of pool) contracts.add(a);
   const [txs, transfers, rewards, butlerTxs] = await Promise.all([
     list(env, chainId, `addresses/${config.forwarder}/transactions`, "transactions"),
     list(env, chainId, `tokens/${config.usdc}/transfers`, "transfers", 3),
@@ -58,24 +66,24 @@ async function build(env, config) {
     config.butler ? list(env, chainId, `addresses/${config.butler}/transactions`, "transactions", 1) : { items: [] },
   ]);
 
-  // Fee manager: every FarmForwarder.execute is one transaction the fee manager paid for.
+  // Fee manager: every FarmForwarder.execute* sent by one of its own wallets is one transaction it paid for.
   const now = Date.now() / 1000;
-  let gasWei = 0n, day = 0;
+  let gasWei = 0n, day = 0, sponsored = 0;
   const relayers = new Set();
   for (const { nativeTransaction: t } of txs.items) {
-    if (!/^execute/.test(t.method?.methodName || "")) continue;
+    if (!/^execute/.test(t.method?.methodName || "") || !pool.has(lc(t.from?.address))) continue;
+    sponsored++;
     gasWei += BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0);
     if (now - t.blockTimestamp < 86_400) day++;
     relayers.add(lc(t.from.address));
   }
-  const sponsored = txs.items.filter(({ nativeTransaction: t }) => /^execute/.test(t.method?.methodName || "")).length;
 
   // News feed and neighbours from the latest test-USDC transfers.
   const activity = [];
   const farmers = new Map();
   for (const t of transfers.items) {
     const l = label(t, c);
-    if (!l || contracts.has(l.who)) continue;
+    if (!l || contracts.has(l.who) || !isAddr(l.who) || !isHash(t.txHash)) continue;
     if (activity.length < 15) activity.push({ who: l.who, text: l.text, at: t.blockTimestamp, tx: t.txHash });
     if (!farmers.has(l.who)) farmers.set(l.who, t.blockTimestamp);
   }
@@ -89,7 +97,7 @@ async function build(env, config) {
     const tr = t.erc20Transfer || t;
     if (lc(tr.from?.address) !== c.quests || lc(tr.erc20Token?.address) !== c.usdc || !REWARDS.has(String(tr.value))) continue;
     const who = lc(tr.to?.address);
-    if (contracts.has(who)) continue;
+    if (contracts.has(who) || !isAddr(who)) continue;
     const e = done.get(who) || { who, quests: 0, usdc: 0, at: 0 };
     e.quests++;
     e.usdc += usd(tr.value);
@@ -115,7 +123,7 @@ async function build(env, config) {
     // The AI butler's own account: what its agent key did, and what the contract refused.
     butler: butlerTxs.items
       .map(({ nativeTransaction: t }) => t)
-      .filter((t) => /^execute/.test(t.method?.methodName || ""))
+      .filter((t) => /^execute/.test(t.method?.methodName || "") && isAddr(lc(t.from?.address)) && isHash(t.txHash))
       .slice(0, 8)
       .map((t) => ({ by: lc(t.from.address), ok: t.txStatus === "1", at: t.blockTimestamp, tx: t.txHash })),
   };

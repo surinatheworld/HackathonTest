@@ -231,11 +231,19 @@ describe("FarmGame hardening and real yield", () => {
     await game.fundRewards(usdc(1)); // tiny pool
     await game.plant(2, usdc(1_000_000)); // 90 days at 14% would want ~34,520 USDC
     await time.increase(90 * DAY);
+    const due = await game.cropYield(1);
     const before = await token.balanceOf(owner);
     await game.harvest(1);
     expect((await token.balanceOf(owner)) - before).to.equal(usdc(1_000_001));
     expect(await game.rewardReserve()).to.equal(0n);
     expect(await token.balanceOf(game)).to.equal(0n);
+    // The interest the pool could not pay is owed, not lost: claim() pays it once the pool is refilled.
+    expect((await game.lends(owner)).accrued).to.equal(due - usdc(1));
+    await game.fundRewards(due);
+    const mid = await token.balanceOf(owner);
+    await game.claim();
+    expect((await token.balanceOf(owner)) - mid).to.equal(due - usdc(1));
+    expect(await game.rewardReserve()).to.equal(usdc(1));
   });
 
   it("a farm holds at most 12 growing crops, and nobody steals from themselves", async () => {

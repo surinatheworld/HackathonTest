@@ -68,6 +68,9 @@ describe("Fuji gasless deployment (fork)", function () {
     const chainlink = await coop.price();
     const pool = await pond.poolPrice();
     expect(pool).to.be.closeTo(chainlink, chainlink / 5n); // within 20%: players and keepers move it
+    // The faucet gives each wallet 1,000 once an hour; the first test already took it.
+    await expect(usdc.connect(player).faucet()).to.be.revertedWithCustomError(usdc, "FaucetCooldown");
+    await time.increase(3601);
     await usdc.connect(player).faucet();
     await usdc.connect(player).approve(pond, ethers.MaxUint256);
     await pond.connect(player).zapIn(U(100), 1);

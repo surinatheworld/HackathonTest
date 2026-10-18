@@ -1,5 +1,5 @@
 # Cloudflare Pages headers.
-# The page and the contract addresses must never be cached, so a fresh `npm run deploy` + push
+# The page and the contract addresses must never be cached, so a fresh `npm run deploy:gasless` + push
 # reaches players immediately.
 /
   Cache-Control: no-cache

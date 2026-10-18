@@ -5,6 +5,8 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const DAY = 60;
 const usdc = (n) => ethers.parseUnits(String(n), 6);
 const avax = (n) => ethers.parseUnits(String(n), 18);
+// Daily loops below take a little more than one game day per round, so start them at the top of a day.
+const startOfDay = async () => time.increaseTo(Math.ceil(((await time.latest()) + 1) / DAY) * DAY + 1);
 const KIND = 1_000_000_000n;
 const TYPES = {
   ForwardRequest: [
@@ -118,10 +120,12 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
 
     // Chương 5: Bậc thầy
     await notYet(14);
+    await startOfDay();
     for (let d = 0; d < 7; d++) { await time.increase(DAY); await game.connect(alice).water(1); }
     await items.connect(alice).claimBadge(1005, 0);
     await done(14);
     await coop.connect(alice).borrow(usdc(20)); // health 3.75 >= 1.5
+    await startOfDay();
     await items.connect(alice).startWatch(1004);
     await items.connect(alice).startWatch(1003);
     for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); await items.connect(alice).startWatch(1004); } // daily check-ins
@@ -154,8 +158,8 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     expect(await quests.progress(alice)).to.equal(1n);
   });
 
-  it("pays rewards from the funded pool, never mints, and waits when the pool is dry", async () => {
-    const { owner, alice, token, quests } = await deploy();
+  it("pays rewards from the funded pool, never mints; a dry pool owes the reward instead of blocking progress", async () => {
+    const { owner, alice, token, game, quests } = await deploy();
     await token.connect(alice).faucet();
     const supply = await token.totalSupply();
     await quests.connect(alice).complete(0);
@@ -163,14 +167,34 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     expect(await quests.rewardPool()).to.equal(usdc(4_990));
     await expect(quests.connect(alice).withdrawPool(alice, 1)).to.be.revertedWithCustomError(quests, "OwnableUnauthorizedAccount");
     await quests.withdrawPool(owner, usdc(4_990));
-    const game = await ethers.getContractAt("FarmGame", await quests.game());
     await token.connect(alice).approve(game, ethers.MaxUint256);
     await game.connect(alice).deposit(usdc(10));
-    await expect(quests.connect(alice).complete(0)).to.be.revertedWithCustomError(quests, "RewardPoolEmpty").withArgs(0, usdc(10));
-    expect(await quests.progress(alice)).to.equal(1n);
-    await token.transfer(quests, usdc(10));
-    await quests.connect(alice).complete(0);
-    expect(await quests.progress(alice)).to.equal(2n);
+    const before = await token.balanceOf(alice);
+    await expect(quests.connect(alice).complete(0)).to.emit(quests, "RewardOwed").withArgs(alice.address, 1n, usdc(10));
+    expect(await quests.progress(alice), "the learning path goes on").to.equal(2n);
+    expect(await quests.owed(alice)).to.equal(usdc(10));
+    expect(await token.balanceOf(alice)).to.equal(before);
+    await expect(quests.connect(alice).claimOwed()).to.be.revertedWithCustomError(quests, "RewardPoolEmpty").withArgs(0, usdc(10));
+    await expect(quests.connect(owner).claimOwed()).to.be.revertedWithCustomError(quests, "NothingOwed");
+    await token.transfer(quests, usdc(4)); // a partial top-up pays what it can
+    await expect(quests.connect(alice).claimOwed()).to.emit(quests, "OwedPaid").withArgs(alice.address, usdc(4), usdc(6));
+    await token.transfer(quests, usdc(100));
+    await quests.connect(alice).claimOwed();
+    expect(await quests.owed(alice)).to.equal(0n);
+    expect((await token.balanceOf(alice)) - before).to.equal(usdc(10));
+    expect(await quests.rewardPool()).to.equal(usdc(94));
+  });
+
+  it("a contract cannot play quests, so it cannot spin up throwaway players to drain the pool", async () => {
+    const { owner, token, game, quests } = await deploy();
+    const farmer = await (await ethers.getContractFactory("QuestFarmerMock")).deploy();
+    await token.transfer(farmer, usdc(10) + 1n); // funded by a plain transfer, no faucet needed
+    // Before the fix this took 40 USDC from the pool, and a loop of such farmers emptied it in a few transactions.
+    await expect(farmer.run(token, game, quests)).to.be.revertedWithCustomError(quests, "NotAPlayer");
+    expect(await quests.rewardPool()).to.equal(usdc(5_000));
+    expect(await quests.progress(farmer)).to.equal(0n);
+    await quests.connect(owner).complete(0); // a wallet still plays as before
+    expect(await quests.progress(owner)).to.equal(1n);
   });
 
   it("claiming costs the same gas however long the player has played (no history scans)", async () => {
@@ -190,12 +214,22 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     expect(await quests.progress(alice)).to.equal(3n);
   });
 
-  it("works gasless for a wallet with no AVAX", async () => {
-    const { token, quests, relay } = await deploy();
+  it("works gasless for a wallet with no AVAX, owed rewards included", async () => {
+    const { owner, token, quests, relay } = await deploy();
     const zero = ethers.Wallet.createRandom().connect(ethers.provider);
     await relay(zero, token, "faucet", []);
     await relay(zero, quests, "complete", [0]);
     expect(await quests.progress(zero.address)).to.equal(1n);
+    expect(await token.balanceOf(zero.address)).to.equal(usdc(1_010));
+    await quests.withdrawPool(owner, await quests.rewardPool());
+    await relay(zero, token, "approve", [await quests.game(), ethers.MaxUint256]);
+    const game = await ethers.getContractAt("FarmGame", await quests.game());
+    await relay(zero, game, "deposit", [usdc(10)]);
+    await relay(zero, quests, "complete", [0]);
+    expect(await quests.owed(zero.address)).to.equal(usdc(10));
+    await token.transfer(quests, usdc(10));
+    await relay(zero, quests, "claimOwed", []);
+    expect(await quests.owed(zero.address)).to.equal(0n);
     expect(await token.balanceOf(zero.address)).to.equal(usdc(1_010));
     expect(await ethers.provider.getBalance(zero.address)).to.equal(0n);
   });

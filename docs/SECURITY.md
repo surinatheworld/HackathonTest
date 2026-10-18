@@ -47,14 +47,17 @@ Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có
 
 ### FarmQuests (Nhiệm vụ)
 
-- Không có owner và không có hàm quản trị.
+- Có owner (hiện là ví deploy). Owner chỉ rút được thưởng chưa dùng, không sửa được tiến độ hay phần thưởng đang nợ.
+- Chỉ ví người chơi (trực tiếp hoặc qua forwarder) nhận được thưởng; contract thì không.
+- Hết quỹ thì vẫn qua nhiệm vụ, thưởng được ghi nợ và trả sau bằng `claimOwed()`.
 - Mỗi nhiệm vụ chỉ nhận được một lần, theo đúng thứ tự.
 - Điều kiện được đọc trực tiếp từ FarmGame, FarmCoop, FarmPond và FarmItems.
 - 3 test trong `test/quests.test.js`: đi hết 18 nhiệm vụ, không nhảy cóc, chạy được gasless.
 
-## Các tình huống có test (55 test thường, 6 test fork)
+## Các tình huống có test (88 test thường, 11 test fork)
 
-- **Quỹ thưởng không bị rút cạn**: lãi chỉ trả tới mức quỹ còn, gốc luôn được trả đủ (`coop-pond.test.js`).
+- **Quỹ thưởng không bị rút cạn**: lãi chỉ trả tới mức quỹ còn, gốc luôn được trả đủ, phần lãi thiếu được ghi lại để nhận sau (`coop-pond.test.js`).
+- **Tiền test**: chỉ ví deploy in được; vòi mỗi ví 1 lần/giờ; contract không nhận vòi được (`tokens.test.js`).
 - **Fee manager không bị lạm dụng**:
   - Chữ ký không dùng lại được. Không ai ký thay người khác được. Request hết hạn bị từ chối (`gasless.test.js`).
   - Ví chưa trồng cây không được trộm điểm. Đi kèm whitelist hàm, trần gas, và chặn `approve` tới ví lạ (smoke test: HTTP 403).
@@ -78,6 +81,7 @@ Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có
 
 ## Giới hạn đã biết (testnet)
 
-- USDC và gAVAX test ai cũng mint được qua faucet, nên điểm mùa có thể bị cày bằng nhiều ví. Bản mainnet cần đăng nhập bằng Privy kèm giới hạn lượt cho mỗi người (việc của Backend).
-- `MockYieldSource` tạo lãi bằng cách tự mint USDC test. Trên mainnet dùng `AaveV3YieldSource`, và phải kiểm toán độc lập trước khi giữ tiền thật.
+- Vòi tiền test vẫn mở cho mọi ví (1 lần/giờ mỗi ví), nên người có nhiều ví vẫn cày được tiền test và điểm mùa, chỉ chậm hơn. Cách xử lý khi quỹ bị rút: `npm run top-up:quests` (quỹ nhiệm vụ), `FarmCoop.fund` (Hợp tác xã), `FarmGame.fundRewards` (quỹ thưởng). Bản mainnet cần đăng nhập bằng Privy kèm giới hạn lượt cho mỗi người.
+- Ví rỗng không trộm điểm được, nhưng vẫn lách được bằng một cây rất nhỏ.
+- `MockYieldSource` trả lãi từ quỹ lãi nạp sẵn (100.000 USDC test), không in thêm; hết quỹ thì ngừng trả lãi. Trên mainnet dùng `AaveV3YieldSource`, và phải kiểm toán độc lập trước khi giữ tiền thật.
 - `DemoPriceFeed` do deployer điều khiển. Hợp tác xã chỉ dùng nó khi owner chủ động gọi `setOracle` để demo, bình thường dùng thẳng Chainlink.

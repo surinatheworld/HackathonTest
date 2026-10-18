@@ -88,12 +88,16 @@ async function checkInvariants(c, crops, label) {
   for (const p of players) coll += (await coop.positions(p)).collateral;
   expect(coll, `${label}: totalCollateral = sum of collateral`).to.equal(await coop.totalCollateral());
   expect(await gavax.balanceOf(coop), `${label}: coop gAVAX held`).to.be.gte(coll);
-  // FarmQuests: rewards only ever leave the funded pool.
+  // FarmQuests: rewards only ever leave the funded pool; what a dry pool could not pay is owed, never lost.
   let paid = 0n;
   for (const p of players) {
     const n = await quests.progress(p);
     expect(n).to.be.lte(18n);
-    for (let q = 0n; q < n; q++) paid += await quests.rewardOf(q);
+    let earned = 0n;
+    for (let q = 0n; q < n; q++) earned += await quests.rewardOf(q);
+    const owed = await quests.owed(p);
+    expect(owed, `${label}: owed <= earned`).to.be.lte(earned);
+    paid += earned - owed;
   }
   expect((await quests.rewardPool()) + paid, `${label}: quest pool conserved`).to.equal(U(2_000));
 }
@@ -144,6 +148,7 @@ describe("Invariants under random play (seeded stateful fuzzing)", function () {
         (p) => coop.connect(p).liquidate(r.pick(players).address),
         () => feed.connect(owner).setPrice(ethers.parseUnits(String(5 + r.int(30)), 8)),
         async (p) => quests.connect(p).complete((await quests.hintFor(p, await quests.progress(p)))[1]),
+        (p) => quests.connect(p).claimOwed(),
         () => time.increase(1 + r.int(DAY * 20)),
       ];
       for (let i = 0; i < STEPS; i++) {

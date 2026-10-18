@@ -1,5 +1,5 @@
 // npm run sync-config -- <owner address> [--l1-rpc URL] [--l1-name "Farm L1"] [--l1-symbol FARM] [--l1-explorer URL]
-// Rebuilds prototype/chain-config.js from what deploy.html put on-chain, so nobody has to copy addresses by hand.
+// Rebuilds prototype/chain-config.js from what deploy.html put on-chain (deploy.html was removed in commit 44131d3; see git history), so nobody has to copy addresses by hand.
 // Finds the owner's contract creations on Fuji (Routescan API), picks the newest FarmVault, then reads the rest
 // from the contracts themselves.
 const fs = require("fs");

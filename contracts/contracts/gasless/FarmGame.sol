@@ -259,7 +259,11 @@ contract FarmGame is ERC2771Context, ReentrancyGuard {
         Crop storage c = _own(cropId);
         uint256 ripe = readyAt(cropId);
         if (block.timestamp < ripe) revert NotRipe(ripe);
-        uint256 payout = c.amount + _takeReward(cropYield(cropId));
+        uint256 due = cropYield(cropId);
+        uint256 got = _takeReward(due);
+        // A short reward pool never eats the interest: what it cannot pay now is owed, and claim() pays it later.
+        if (due > got) lends[c.owner].accrued += due - got;
+        uint256 payout = c.amount + got;
         uint256 pts = c.amount / 1e6;
         farmers[c.owner].points += pts;
         _close(cropId, Status.Harvested, payout, pts);

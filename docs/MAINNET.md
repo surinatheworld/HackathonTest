@@ -1,6 +1,6 @@
 # Chuẩn bị lên mainnet
 
-Thể lệ UniHack 2026 cấm nhận tiền thật, nên dự án **chỉ chạy trên Fuji**. Tài liệu này ghi lại những gì đã sẵn sàng và những gì còn thiếu nếu sau này lên Avalanche C-Chain mainnet. Nó không phải kế hoạch ra mắt.
+Thể lệ UniHack 2026 cho chạy trên Fuji, L1 riêng hoặc C-Chain mainnet. Dự án chọn **chỉ chạy trên Fuji**, vì game không được nhận tiền thật của người chơi khi chưa có giấy phép tại Việt Nam (xem phần pháp lý trong README). Tài liệu này ghi lại những gì đã sẵn sàng và những gì còn thiếu nếu sau này lên Avalanche C-Chain mainnet. Nó không phải kế hoạch ra mắt.
 
 ## Đã diễn tập (không tốn tiền thật)
 

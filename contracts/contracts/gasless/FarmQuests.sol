@@ -46,8 +46,10 @@ interface IQuestItems {
 
 /// Nhiệm vụ: 18 quests in 5 chapters, easy to hard, unlocked one at a time. Each one is checked on-chain from the
 /// state of the farm contracts, so nobody can claim a quest they did not do. Rewards are paid from a reward pool the
-/// team funds up front (a marketing budget held by this contract), never minted: when the pool runs dry, quests wait
-/// until it is topped up. The owner (the team multisig) can only add to the pool or take unused rewards back.
+/// team funds up front (a marketing budget held by this contract), never minted. When the pool runs dry the player
+/// still moves on to the next quest and the reward is owed, paid by claimOwed() once the pool is topped up, so an
+/// empty pool never freezes the learning path. The owner (the deployer today, the team multisig later) can only take
+/// unused rewards back; it cannot change anyone's progress or what they are owed.
 contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -61,13 +63,19 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
 
     /// number of quests completed; the next one to do is quest number `progress[user]`
     mapping(address => uint256) public progress;
+    /// rewards earned while the pool was empty, not paid yet
+    mapping(address => uint256) public owed;
 
     event QuestCompleted(address indexed user, uint256 indexed quest, uint256 reward);
+    event RewardOwed(address indexed user, uint256 indexed quest, uint256 amount);
+    event OwedPaid(address indexed user, uint256 amount, uint256 stillOwed);
     event PoolWithdrawn(address indexed to, uint256 amount);
 
     error AllDone();
     error NotDoneYet(uint256 quest);
     error RewardPoolEmpty(uint256 available, uint256 needed);
+    error NotAPlayer();
+    error NothingOwed();
 
     constructor(address forwarder, address game_, address coop_, address pond_, address items_, address usdc_)
         ERC2771Context(forwarder)
@@ -117,17 +125,36 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     }
 
     /// Complete the current quest and take its reward. `hint` is a crop id for quests 2 and 4 (see hintFor), else 0.
+    /// Only a wallet may play, directly or through the forwarder (which only runs requests a wallet signed): a contract
+    /// cannot create throwaway "players" in one transaction and farm the pool with them.
     function complete(uint256 hint) external nonReentrant returns (uint256 quest, uint256 reward) {
+        if (msg.sender != tx.origin && !isTrustedForwarder(msg.sender)) revert NotAPlayer();
         address u = _msgSender();
         quest = progress[u];
         if (quest >= COUNT) revert AllDone();
         if (!check(u, quest, hint)) revert NotDoneYet(quest);
         reward = rewardOf(quest);
-        uint256 pool = usdc.balanceOf(address(this));
-        if (pool < reward) revert RewardPoolEmpty(pool, reward);
         progress[u] = quest + 1;
         emit QuestCompleted(u, quest, reward);
-        usdc.safeTransfer(u, reward);
+        if (usdc.balanceOf(address(this)) < reward) {
+            owed[u] += reward;
+            emit RewardOwed(u, quest, reward);
+        } else {
+            usdc.safeTransfer(u, reward);
+        }
+    }
+
+    /// Collect rewards that were owed while the pool was empty: as much as the pool holds now.
+    function claimOwed() external nonReentrant returns (uint256 paid) {
+        address u = _msgSender();
+        uint256 due = owed[u];
+        if (due == 0) revert NothingOwed();
+        uint256 pool = usdc.balanceOf(address(this));
+        paid = due < pool ? due : pool;
+        if (paid == 0) revert RewardPoolEmpty(0, due);
+        owed[u] = due - paid;
+        emit OwedPaid(u, paid, due - paid);
+        usdc.safeTransfer(u, paid);
     }
 
     /// USDC left in the reward pool.

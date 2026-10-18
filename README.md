@@ -8,6 +8,11 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
 
 **Chơi:** https://hanazono-b9s.pages.dev/ → bấm **Kết nối ví** → **Ví trong game** → vào Ruộng rau bấm **Nhận 1.000 USDC test**.
 
+**Avalanche trong dự án:**
+- Mọi tiền và luật chơi nằm trong contract trên **Fuji C-Chain**; fee manager trả gas cho từng lần tưới cây, vì phí ở đây gần như bằng 0 (97 giao dịch trả hộ tốn tổng cộng khoảng 0,0000000034 AVAX, số liệu từ `/api/village` ngày 18/10/2026).
+- Bảng tin và bảng xếp hạng làng đọc từ **Avalanche Data API**; giá AVAX ở Hợp tác xã lấy từ **Chainlink trên Fuji**; nguồn lãi **Aave v3** đã chạy thử trên bản sao C-Chain mainnet.
+- Bản đầu tiên chạy trên **L1 riêng** của game (L1 là chain riêng chạy trên Avalanche) và đã gửi thật một thư **ICM** (cách hai chain Avalanche gửi tin cho nhau, có chữ ký của validator) sang Fuji bằng relayer tự viết: [tx](https://testnet.snowtrace.io/tx/0xd79167ab71bba9c75a3c84c48436939aefa21df443a7143a96f5e0d0d89235a0). Xem [Lịch sử: bản Game L1](#lịch-sử-bản-game-l1).
+
 ## Kiến trúc
 
 ```
@@ -25,7 +30,7 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
 - **FarmGame**:
   - Ruộng rau: cho vay 4%/năm.
   - Vườn cây: khóa 7/30/90 ngày game với lãi 6/9/14%.
-  - Vòng chơi: tưới, chuỗi ngày, gom và trộm điểm mùa. Chỉ ví đang có cây mới được trộm, nên ví ảo tạo ra hàng loạt không cày được điểm qua fee manager.
+  - Vòng chơi: tưới, chuỗi ngày, gom và trộm điểm mùa. Chỉ ví đang có cây mới được trộm, nên ví rỗng không trộm được (vẫn lách được bằng một cây rất nhỏ, xem giới hạn trong [docs/SECURITY.md](docs/SECURITY.md)).
   - Nguồn lãi: tiền nhàn rỗi được gửi vào một `IYieldSource` (trên Fuji là `MockYieldSource`, mô phỏng lãi gửi USDC của Aave v3 và trả lãi từ quỹ lãi nạp sẵn, không in thêm token; trên mainnet là `AaveV3YieldSource`). `harvestYield()` chuyển phần lãi kiếm được vào quỹ thưởng.
   - Mọi hàm dùng `_msgSender()`, nên chạy được cả khi gửi trực tiếp lẫn khi gửi qua fee manager.
 - **FarmCoop** (Hợp tác xã): gửi gAVAX làm thế chấp, vay USDC tối đa 60% giá trị theo giá **Chainlink AVAX/USD** trên Fuji, lãi vay 8%/năm. Khi nợ vượt 75% giá trị, bất kỳ ai cũng có thể trả nợ thay và nhận gAVAX kèm 10% phạt. Giá cũ hơn 2 ngày thì không cho vay.
@@ -35,15 +40,16 @@ Người chơi điều khiển nhân vật đi quanh làng. Mỗi công trình l
   - **Huy hiệu mùa vụ**: 6 huy hiệu, mỗi cái ứng với một bài học DeFi. Contract tự kiểm tra trên chain khi bạn nhận. Huy hiệu cần thời gian phải giữ thật: điểm danh mỗi ngày game trong 3 ngày; Ao cá không được rút bớt, Hợp tác xã phải đang vay với hệ số an toàn từ 1,5 mỗi lần điểm danh. Chỉ trạng thái của chính người chơi được tính, nên người khác không phá được đồng hồ. Huy hiệu không chuyển cho người khác được (soulbound). Thêm **Cúp mùa vụ** cho top 10 mỗi mùa.
   - **Đồ trang trí**: mua bằng điểm mùa, hoặc ghép từ nông sản thành Mâm ngũ quả. Nón lá đội lên được cho nhân vật, đồ trang trí bày ở Nhà mình.
   - **Chợ đổi đồ**: chỉ đổi đồ lấy đồ, contract giữ đồ hộ trong lúc chờ. Phí là 1 điểm mùa cho mỗi món đưa ra. Vật phẩm chỉ đổi chủ qua chợ, nên không lách được phí, và **không có cách nào đổi vật phẩm ra USDC**.
-- **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy). Thưởng trả từ quỹ thưởng 20.000 USDC nạp sẵn trong contract, không in thêm token; hết quỹ thì nhiệm vụ chờ đội nạp thêm. Mỗi lần nhận thưởng tốn cùng một lượng gas dù người chơi đã chơi bao lâu: contract chỉ xem đúng một bản ghi (`complete(hint)`), không quét lịch sử.
+- **FarmQuests** (Nhiệm vụ): nhiệm vụ 1 là kết nối ví (game tự kiểm tra), sau đó 18 nhiệm vụ trên chain chia 5 chương, từ dễ đến khó (Làm quen, Chăm vườn, Tài chính, Làng xóm, Bậc thầy). Thưởng trả từ quỹ thưởng 20.000 USDC nạp sẵn trong contract, không in thêm token. Hết quỹ thì người chơi vẫn qua nhiệm vụ tiếp theo, phần thưởng được ghi nợ và nhận sau bằng `claimOwed()` khi đội nạp thêm. Chỉ ví người chơi mới nhận thưởng được (contract thì không), nên không ai tạo hàng loạt "người chơi ảo" trong một giao dịch để rút quỹ. Mỗi lần nhận thưởng tốn cùng một lượng gas dù người chơi đã chơi bao lâu: contract chỉ xem đúng một bản ghi (`complete(hint)`), không quét lịch sử.
   - Mở khoá lần lượt. Contract tự kiểm tra trên chain là người chơi đã làm thật.
   - Thưởng USDC test tăng dần từ 10 đến 200, tổng 760. Lên mainnet thì thưởng đổi sang điểm hoặc đồ trang trí, không trả tiền thật.
-  - Contract không có owner.
+  - Có owner (hiện là ví deploy `0x2683…f4FC`). Owner chỉ rút được thưởng chưa dùng (`withdrawPool`), không sửa được tiến độ hay phần thưởng đang nợ của ai.
+- **USDC và gAVAX test**: chỉ ví deploy in được (để nạp các quỹ). Người chơi nhận từ vòi (faucet), mỗi ví 1 lần mỗi giờ, và chỉ ví người chơi mới nhận được.
 - **Tặng tiền test**: người chơi tặng USDC hoặc gAVAX test cho bạn bè ngay trong game, không mất phí.
 - **FarmForwarder**: `ERC2771Forwarder` của OpenZeppelin. Kiểm tra chữ ký, nonce (chống phát lại) và hạn của request.
 - **Fee manager** (`functions/api/relay.js`): Cloudflare Pages Function.
   - Chỉ trả gas cho các hàm người chơi trên contract của game. `approve` chỉ được tới contract của game.
-  - Có trần gas, và hạn request tối đa 1 giờ.
+  - Có trần gas, hạn request tối đa 15 phút, ngân sách gas theo giờ cho cả làng.
   - Mô phỏng lệnh trước khi gửi để báo lỗi rõ ràng (ví dụ "Cây chưa chín").
 - **Privy** (`prototype/privy.js`): đăng nhập bằng email hoặc Google, Privy tạo sẵn ví nhúng trên Fuji. Thư viện tải từ esm.sh khi người chơi bấm nút, nên site vẫn không cần build. Ví Privy ký cùng loại request EIP-712, fee manager vẫn trả gas.
 - **Ví trong game**: khóa lưu trên trình duyệt, chỉ dùng cho testnet, sao lưu được. Ví chỉ ký dữ liệu, nên thay bằng ví nhúng như **Privy** về sau không phải đổi contract.
@@ -53,31 +59,31 @@ Event của mọi contract (cho indexer và bot) xem [docs/EVENTS.md](docs/EVENT
 
 ## Đã deploy trên Fuji C-Chain
 
-Bản thứ ba (đã vá theo Slither, xem [docs/SECURITY.md](docs/SECURITY.md)), deploy ngày 17/10/2026. Owner là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
+Bản thứ tư, deploy lại toàn bộ ngày 18/10/2026 sau vòng soát lỗi có giám khảo (xem [Soát lỗi chéo](#soát-lỗi-chéo)). Owner của FarmGame, FarmCoop, FarmItems và ButlerAccount là ví dự án `0x54A2276F134d3Cfaa7572BC326092fABa6352888`. Một ngày game dài 60 giây. Source đã verify trên Snowtrace.
 
 | Contract | Địa chỉ |
 |---|---|
-| FarmGame | [`0x01443baD9354683eE2691cD8aDD88e34c557055F`](https://testnet.snowtrace.io/address/0x01443baD9354683eE2691cD8aDD88e34c557055F#code) |
-| FarmCoop | [`0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf`](https://testnet.snowtrace.io/address/0x51958d71f28F516C599Fcc4Dd71C4976A3E97aAf#code) |
-| FarmPond | [`0x33bA73746cCbe75eE5967Afa2EBfE07F6F543A37`](https://testnet.snowtrace.io/address/0x33bA73746cCbe75eE5967Afa2EBfE07F6F543A37#code) |
-| GaslessUSDC | [`0x794659AB388EEec7f80038191bA763f900CE1978`](https://testnet.snowtrace.io/address/0x794659AB388EEec7f80038191bA763f900CE1978#code) |
-| GaslessAVAX (gAVAX) | [`0xa1e8250Bcbab7436252e3c25764f8898913E7c1C`](https://testnet.snowtrace.io/address/0xa1e8250Bcbab7436252e3c25764f8898913E7c1C#code) |
-| FarmForwarder | [`0x7dD93fef1ce942f11fc72E5BD7F53f749A028636`](https://testnet.snowtrace.io/address/0x7dD93fef1ce942f11fc72E5BD7F53f749A028636#code) |
-| FarmQuests | [`0x02d97Fa1Ea5F0931F9d5CdE08dA20539e527c5b5`](https://testnet.snowtrace.io/address/0x02d97Fa1Ea5F0931F9d5CdE08dA20539e527c5b5#code) |
-| FarmItems | [`0x07a010F692F9C9Cda25E4f49A9255fa4040044c5`](https://testnet.snowtrace.io/address/0x07a010F692F9C9Cda25E4f49A9255fa4040044c5#code) |
-| ButlerAccount | [`0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293`](https://testnet.snowtrace.io/address/0xf60e1a6869d4d9C59F6e012D9ae4F14f08205293#code) |
-| MockYieldSource (bản cũ, tự mint lãi) | [`0x25578A396c89a410EF49a888314911A031185caA`](https://testnet.snowtrace.io/address/0x25578A396c89a410EF49a888314911A031185caA#code) |
-| MockYieldSource (bản mới, trả lãi từ quỹ 100.000 USDC) | [`0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec`](https://testnet.snowtrace.io/address/0xd3c39cd758D0F3187A3aB70Ac339a2A50C40e0Ec#code), chờ owner chuyển FarmGame sang (`npm run migrate:yield`) |
-| DemoPriceFeed | [`0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B`](https://testnet.snowtrace.io/address/0xcaB8a5Ac5B5280B2D5b51EB5dF25958cF1dD602B#code) |
+| FarmGame | [`0x9ba50801058eB32D42c8280BDB2173eF26FB18C6`](https://testnet.snowtrace.io/address/0x9ba50801058eB32D42c8280BDB2173eF26FB18C6#code) |
+| FarmCoop | [`0xb1D9789fF1ABa5714eF02bD40c7E224aC8Ad9a82`](https://testnet.snowtrace.io/address/0xb1D9789fF1ABa5714eF02bD40c7E224aC8Ad9a82#code) |
+| FarmPond | [`0xACc9cceC46092dcD835fB71B9baA31cf10526E25`](https://testnet.snowtrace.io/address/0xACc9cceC46092dcD835fB71B9baA31cf10526E25#code) |
+| GaslessUSDC | [`0x5c7a98a7d5d1c9411B068A484772c66dF43a914C`](https://testnet.snowtrace.io/address/0x5c7a98a7d5d1c9411B068A484772c66dF43a914C#code) |
+| GaslessAVAX (gAVAX) | [`0x5dF6787f075A63BF89eCd123bfa81a4A11c3F8DA`](https://testnet.snowtrace.io/address/0x5dF6787f075A63BF89eCd123bfa81a4A11c3F8DA#code) |
+| FarmForwarder | [`0x7F70e614DB5bAA30F448A15D00ACB0836D538D0e`](https://testnet.snowtrace.io/address/0x7F70e614DB5bAA30F448A15D00ACB0836D538D0e#code) |
+| FarmQuests | [`0x5e7f4810fBA4581fc5ee6c6f74434cD7279bFFC4`](https://testnet.snowtrace.io/address/0x5e7f4810fBA4581fc5ee6c6f74434cD7279bFFC4#code) |
+| FarmItems | [`0x169519F6CBE50C86b673e07d3077fc2A9785e047`](https://testnet.snowtrace.io/address/0x169519F6CBE50C86b673e07d3077fc2A9785e047#code) |
+| ButlerAccount | [`0xBE8cDdC304aac6013470E2E4532206dB8D207eF6`](https://testnet.snowtrace.io/address/0xBE8cDdC304aac6013470E2E4532206dB8D207eF6#code) |
+| MockYieldSource (trả lãi từ quỹ 100.000 USDC, không in thêm) | [`0x9Df49DD2f454aB9ec65eda59501b1ab605b525bC`](https://testnet.snowtrace.io/address/0x9Df49DD2f454aB9ec65eda59501b1ab605b525bC#code) |
+| DemoPriceFeed | [`0x3B4Bd58fa455B72a93919758C847B844E98748F5`](https://testnet.snowtrace.io/address/0x3B4Bd58fa455B72a93919758C847B844E98748F5#code) |
 | Chainlink AVAX/USD (Fuji) | `0x5498BB86BC934c8D34FDA08E81D444153d0D06aD` |
 | Ví trả gas của fee manager (4 ví) | `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, `0x9D6Da18ec4bED6Bf3Cd5541e46e7b7f3E2f9Be10`, `0xc562Ac2a6686F84129Fe5f7b816a462FD3f577cf`, `0xA5Afe2e6DFe5b9D8E988B605C3db15DCf81f81d9` |
 
 Lúc deploy:
 - Quỹ thưởng có 50.000 USDC, trong đó 40.000 USDC gửi vào nguồn lãi.
 - Hợp tác xã có 50.000 USDC để cho vay.
-- Ao cá có 20.000 USDC và 2.015,1 gAVAX, theo giá Chainlink lúc đó là $9,93.
+- Ao cá có 20.000 USDC và 2.044,4 gAVAX, theo giá Chainlink lúc đó là $9,78.
+- Quỹ thưởng nhiệm vụ có 20.000 USDC. Nguồn lãi có quỹ lãi 100.000 USDC nạp sẵn.
 
-**Bằng chứng trên Fuji** (`npm run smoke:gasless`, một ví mới, từ đầu đến cuối 0 AVAX):
+**Bằng chứng trên Fuji** (`npm run smoke:gasless`, một ví mới, từ đầu đến cuối 0 AVAX; chạy trên bản thứ ba, bản mới chạy cùng bài kiểm tra trong CI):
 - Ruộng rau và Vườn cây: faucet ([tx](https://testnet.snowtrace.io/tx/0xe32707387cf8a79ed084360589fba4474167f524de6adf1a07aec73788eacd25)), trồng 10 USDC ([tx](https://testnet.snowtrace.io/tx/0x91d94f198613b982bb54ef0e7bc58436d9d2854b85251743dd00285d34fa8d34)), gửi 50 USDC vào Ruộng rau ([tx](https://testnet.snowtrace.io/tx/0x99e95b3fba78d8395c788f29342a2b6ce379991fafcf022692b74a8d9bd7e3a8)).
 - Hợp tác xã: gửi 5 gAVAX ([tx](https://testnet.snowtrace.io/tx/0xf2c8a59bd369f13530c930b2c3f1a75d43e351726a6194a06be3dae27f607d12)), vay 10 USDC ([tx](https://testnet.snowtrace.io/tx/0xac904fd0e9c7cfaeaaba3b9a218f7e5ef8f05ada56452352479d9b9e5575999e)).
 - Ao cá: thả 100 USDC ([tx](https://testnet.snowtrace.io/tx/0x0a49c7e7d06ac2b752871e6a11df1b383f63c7de656236d4b27c6c0d18de850a)).
@@ -88,7 +94,21 @@ Các bản trước vẫn còn trên Fuji, xem `contracts/deployments/fuji-gasle
 
 ### Ai giữ quyền với tiền chung
 
-- **FarmMultisig (2/3)** là ví chung của 3 thành viên: muốn đổi gì ở quỹ thưởng, nguồn lãi, Hợp tác xã, quỹ thưởng nhiệm vụ hay chợ đồ thì phải có 2 người đồng ý (một người đề xuất `submit`, người thứ hai `confirm`, rồi `execute`). Mất một chìa khóa thì 2 người còn lại thay được (`replaceOwner`).
+Hôm nay quyền nằm ở hai ví, chưa có multisig:
+
+| Contract | Owner hôm nay | Owner làm được gì | Multisig |
+|---|---|---|---|
+| FarmGame | `0x54A2…2888` | đổi nguồn lãi (rút rồi gửi toàn bộ USDC trong game, kể cả tiền gốc, sang nguồn khác), gửi/rút tiền ở nguồn lãi | chưa bật |
+| FarmCoop | `0x54A2…2888` | đổi nguồn giá | chưa bật |
+| FarmItems | `0x54A2…2888` | phí chợ, giá đồ, trao cúp | chưa bật |
+| ButlerAccount | `0x54A2…2888` | cấp, thu hồi quyền cho quản gia | chưa bật |
+| FarmQuests | `0x2683…f4FC` (ví deploy) | rút thưởng chưa dùng | chưa bật |
+| DemoPriceFeed | `0x2683…f4FC` (ví deploy) | đặt giá giả cho màn hạn hán; khi Hợp tác xã đang dùng nó, người giữ khóa này quyết định ai bị thanh lý | chưa bật |
+| GaslessUSDC, GaslessAVAX | không có owner | chỉ ví deploy `0x2683…f4FC` in được tiền test | không cần |
+
+Nghĩa là hôm nay một ví duy nhất có thể chuyển tiền chung và cả tiền gốc người chơi. FarmMultisig 2/3 đã viết và có test, sẽ bật khi có địa chỉ ví của các thành viên; trước mainnet cần thêm khóa thời gian (timelock).
+
+- **Khi bật, FarmMultisig (2/3)** là ví chung của 3 thành viên: muốn đổi gì ở quỹ thưởng, nguồn lãi, Hợp tác xã, quỹ thưởng nhiệm vụ hay chợ đồ thì phải có 2 người đồng ý (một người đề xuất `submit`, người thứ hai `confirm`, rồi `execute`). Mất một chìa khóa thì 2 người còn lại thay được (`replaceOwner`).
 - Cách bật: `MULTISIG_OWNERS=<ví 1>,<ví 2>,<ví 3> npm run multisig:deploy`, xem trước bằng `npm run multisig:handover`, rồi chạy lại với `CONFIRM=1` để chuyển quyền FarmGame, FarmCoop, FarmQuests, FarmItems sang multisig. Chỉ cần địa chỉ ví công khai, không bao giờ cần khóa riêng của ai.
 - DemoPriceFeed (giá giả cho màn "hạn hán") vẫn do ví deploy giữ vì nó không giữ tiền. Hợp tác xã chỉ nghe theo nó khi multisig gọi `setOracle`, nên muốn bật màn hạn hán vẫn cần 2 người.
 - Fee manager trả gas bằng 4 ví (1 ví chính và 3 ví con sinh ra từ cùng khóa bí mật trên Cloudflare). Mỗi người chơi dính với một ví, nên nhiều người bấm cùng lúc không tranh nhau nonce. Mỗi ví người chơi được trả gas tối đa 40 lần/phút và 500 lần/ngày, mỗi IP 300 lần/phút. Nạp thêm AVAX test cho các ví: `npm run fund:relayers`.
@@ -122,7 +142,7 @@ docs/SECURITY.md                Kết quả Slither và các tình huống đã 
 ```bash
 cd contracts
 npm install
-npm test            # 55 test
+npm test            # 88 test (cùng 11 test fork bỏ qua khi chạy thường)
 npm run test:fork   # 6 test trên chính các contract đang chạy ở Fuji
 npm run local       # http://localhost:8790, chuỗi local + fee manager local
 ```
@@ -141,7 +161,6 @@ Trong game: **WASD / mũi tên** để đi, hoặc chạm vào một khu. **E** 
 | Ao cá | LP x·y = k USDC/gAVAX, phí 0,3%, impermanent loss thật | On-chain (FarmPond) |
 | Hợp tác xã | Thế chấp gAVAX, vay USDC theo giá Chainlink, thanh lý | On-chain (FarmCoop) |
 | Chợ phiên | Swap trong Ao cá, trượt giá tối đa 1% | On-chain (FarmPond) |
-
 | Kho đồ | Nông sản, huy hiệu học DeFi, đồ trang trí | On-chain (FarmItems) |
 | Chợ đổi đồ | Đổi đồ lấy đồ, phí bằng điểm | On-chain (FarmItems) |
 | Nhiệm vụ | 18 bài tập từ dễ đến khó, có thưởng | On-chain (FarmQuests) |
@@ -151,7 +170,12 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 ## Ba câu pitch phải trả lời
 
 1. **Why on-chain?** Tiền nằm trong contract và chỉ chủ ví điều khiển được bằng chữ ký. Quản gia AI bị giới hạn bằng contract, không phải bằng lời hứa.
-2. **Why Avalanche?** C-Chain finality dưới 2 giây và phí rất thấp, nên fee manager trả gas cho cả những thao tác nhỏ như tưới cây. Người chơi mới không cần biết gas là gì, và game lên mobile được.
+2. **Why Avalanche?**
+   - Giao dịch xác nhận dưới 2 giây và phí gần như bằng 0, nên fee manager trả gas được cho cả những thao tác nhỏ như tưới cây. Số thật hiện ở Cổng làng trong game và ở `GET /api/village` (`sponsoredTxs`, `gasPaidAvax`).
+   - Avalanche Data API thay cho node hay subgraph riêng: bảng tin, bảng xếp hạng, lịch sử quản gia.
+   - Chainlink AVAX/USD trên Fuji định giá Hợp tác xã. Aave v3 trên C-Chain là nguồn lãi khi lên mainnet (`npm run test:mainnet-fork`).
+   - ICM: bản Farm L1 đã gửi thật một thư L1 → Fuji ([tx](https://testnet.snowtrace.io/tx/0xd79167ab71bba9c75a3c84c48436939aefa21df443a7143a96f5e0d0d89235a0)), luồng ICM vẫn có test với MockTeleporter (`test/farm.test.js`).
+   - Đường quay lại Game L1: khi relayer managed chạy ổn (hoặc tự chạy `icm-relayer`), các thao tác dày như tưới cây lên L1 riêng với phí 0, tiền vẫn nằm trên C-Chain và đồng bộ qua ICM.
 3. **Tiền từ đâu?**
    - Lãi từ thị trường cho vay: FarmGame gửi tiền nhàn rỗi vào `IYieldSource`. Trên Fuji là bản mô phỏng lãi Aave v3, trả từ quỹ lãi nạp sẵn chứ không in thêm token. Trên mainnet là adapter Aave v3, đã diễn tập trên bản sao mainnet với Aave thật (`npm run test:mainnet-fork`).
    - Phí 0,3% của Ao cá trả cho người thả cá.
@@ -187,8 +211,10 @@ Không có token game, không có random drop, không lootbox: mọi thứ tất
 - [x] Hợp tác xã (Chainlink, thanh lý) và Ao cá (x·y = k) trên contract
 - [x] Nguồn lãi `IYieldSource`: mock trên Fuji, adapter Aave v3 cho mainnet
 - [x] Đăng nhập Privy (email / Google, ví nhúng), giữ nguyên contract và fee manager
-- [ ] Bot thanh lý, bot cân giá Ao cá theo Chainlink, indexer cho bảng xếp hạng
-- [ ] Giới hạn lượt trả gas theo người chơi (Cloudflare KV), pixel art thật
+- [x] Indexer làng (bảng tin, bảng xếp hạng) bằng Avalanche Data API
+- [x] Giới hạn lượt trả gas theo ví và IP (bộ nhớ + Cache API), ngân sách gas theo giờ
+- [ ] Bot thanh lý, bot cân giá Ao cá theo Chainlink
+- [ ] Chuyển giới hạn sang Cloudflare KV, pixel art thật
 
 ## Kiểm thử
 
@@ -212,6 +238,16 @@ Ngày 18/10/2026, 3 agent AI soát độc lập (dòng tiền, quyền hạn, fe
 - Fee manager có thêm ngân sách gas theo giờ cho cả làng, giới hạn kích thước dữ liệu và hạn chót của yêu cầu ngắn hơn. Hai trang GET (trạng thái, cả làng) có giới hạn tần suất và cache, và indexer trả bản cũ khi Data API lỗi.
 - Thư viện ethers tải từ CDN có SRI; site không cho trang khác nhúng vào iframe.
 - `npm run top-up:quests` nạp lại quỹ nhiệm vụ, phòng trường hợp có người dùng nhiều ví để rút cạn.
+
+**Vòng 3** (giám khảo + soi lỗi, cùng ngày). Một AI đóng vai giám khảo UniHack chấm theo đúng thể lệ (74/100), một AI soi lỗ hổng và đề xuất cách sửa, sau đó sửa và **deploy lại toàn bộ contract**:
+
+- **Ai cũng in được USDC và gAVAX test.** Với số tiền tự in, một người có thể rút cạn quỹ thưởng, vay hết tiền của Hợp tác xã và làm lệch giá Ao cá. Giờ chỉ ví deploy in được. Vòi tiền cho mỗi ví 1 lần mỗi giờ, và một contract không còn tạo được hàng loạt "người chơi ảo" để nhận vòi.
+- **Quỹ nhiệm vụ bị rút cạn bằng contract, rồi mọi người kẹt nhiệm vụ.** Giờ chỉ ví người chơi mới nhận thưởng. Hết quỹ thì người chơi vẫn qua nhiệm vụ, thưởng được ghi nợ và nhận sau (`claimOwed`).
+- **Thu hoạch khi quỹ thưởng thiếu thì mất lãi mà game vẫn báo "gốc + lãi".** Giờ phần lãi thiếu được ghi lại và nhận bằng **Thu lãi** khi quỹ được nạp. Game cảnh báo trước khi thu hoạch và báo đúng số tiền nhận được.
+- **Chợ đổi đồ bị che** bởi 25 đề nghị rác. Giờ game đọc tiếp cho tới khi đủ đề nghị liên quan, mỗi người tối đa 3 dòng.
+- **Bảng tin làng**: chỉ đếm giao dịch do chính fee manager trả gas, bỏ mọi địa chỉ hay mã giao dịch không đúng dạng trước khi đưa lên trang.
+- **Tài liệu và chữ trong game**: ghi đúng ai giữ quyền với tiền, số test, nguồn lãi; câu trả lời "Why Avalanche?" nêu đúng phần Avalanche; bỏ các chữ chuyên môn như LP, x402, ERC-2771 khỏi giao diện.
+- Nguồn lãi mới (trả lãi từ quỹ, không in thêm) được dùng ngay từ lúc deploy, nên không cần bước `migrate:yield` nữa.
 
 ## Lịch sử: bản Game L1
 

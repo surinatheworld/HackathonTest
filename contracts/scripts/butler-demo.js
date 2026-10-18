@@ -1,5 +1,5 @@
 // npm run butler:demo
-// Runs as the AI agent only (AGENT_PRIVATE_KEY). The owner grants the session key once in deploy.html,
+// Runs as the AI agent only (AGENT_PRIVATE_KEY). The owner grants the session key once (deploy-gasless.js does it when AGENT_PRIVATE_KEY is set),
 // step 5. The agent deposits inside its policy, then a prompt-injected transfer is reverted on-chain.
 // BUTLER_ONCHAIN_ATTACK=1 also sends that transfer as a real transaction, so the revert is visible on Snowtrace.
 require("dotenv").config();
@@ -27,9 +27,9 @@ async function main() {
   console.log(`ButlerAccount ${butler.target}`);
   console.log(`Agent ${agent.address} · gas ${ethers.formatEther(gas)} AVAX`);
   if (who.toLowerCase() !== agent.address.toLowerCase() || !active) {
-    throw new Error("Owner chưa cấp quyền cho ví agent này (hoặc đã thu hồi). Mở deploy.html, bước 5: Cấp quyền cho quản gia.");
+    throw new Error("Owner chưa cấp quyền cho ví agent này (hoặc đã thu hồi). Owner gọi setAgent trên ButlerAccount (deploy:gasless tự làm khi có AGENT_PRIVATE_KEY).");
   }
-  if (gas === 0n) throw new Error("Ví agent chưa có AVAX làm gas. Bước 5 trong deploy.html gửi 0,1 AVAX.");
+  if (gas === 0n) throw new Error("Ví agent chưa có AVAX làm gas. Gửi khoảng 0,1 AVAX test cho ví agent.");
   console.log(`Policy: hạn mức ${fmt(cap)} USDC/ngày, còn ${fmt(left)} · ButlerAccount giữ ${fmt(bal)} USDC`);
 
   if ((await usdc.allowance(butler.target, vault.target)) < U(1_000_000)) {

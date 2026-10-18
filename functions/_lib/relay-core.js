@@ -40,6 +40,8 @@ const TOKEN_ABI = [
   "function transfer(address to, uint256 amount)",
   "error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)",
   "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
+  "error FaucetCooldown(uint256 nextAt)",
+  "error NotAPlayer()",
 ];
 const COOP_ABI = [
   "function depositCollateral(uint256 amount)",
@@ -84,7 +86,15 @@ const ITEMS_ABI = [
   "error WrongItem(uint256 want, uint256 got)",
   "error NotAHat()",
 ];
-const QUESTS_ABI = ["function complete(uint256 hint)", "error NotDoneYet(uint256 quest)", "error AllDone()", "error RewardPoolEmpty(uint256 available, uint256 needed)"];
+const QUESTS_ABI = [
+  "function complete(uint256 hint)",
+  "function claimOwed()",
+  "error NotDoneYet(uint256 quest)",
+  "error AllDone()",
+  "error RewardPoolEmpty(uint256 available, uint256 needed)",
+  "error NothingOwed()",
+  "error NotAPlayer()",
+];
 const POND_ABI = [
   "function addLiquidity(uint256 usdcAmount, uint256 maxAvax, uint256 minShares)",
   "function zapIn(uint256 usdcAmount, uint256 minShares)",

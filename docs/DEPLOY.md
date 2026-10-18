@@ -19,7 +19,7 @@ Khi chưa có secret: người chơi dùng **MetaMask** vẫn chơi được, ga
 **Chính sách của fee manager** (`functions/_lib/relay-core.js`):
 - Chỉ trả gas cho hàm người chơi trên FarmGame, FarmCoop, FarmPond, GaslessUSDC và GaslessAVAX. Hàm owner như `invest`, `setOracle` thì owner tự trả gas.
 - `approve` USDC chỉ được tới FarmGame, FarmCoop hoặc FarmPond. `approve` gAVAX chỉ được tới FarmCoop hoặc FarmPond.
-- `value = 0`, gas tối đa 800.000, hạn request tối đa 1 giờ.
+- `value = 0`, gas tối đa 800.000, hạn request tối đa 15 phút.
 - Chữ ký, nonce và hạn được kiểm tra trên chain qua `FarmForwarder.verify`.
 - Mô phỏng lời gọi trước khi gửi để trả lý do lỗi rõ ràng.
 
@@ -37,7 +37,7 @@ npm run butler:demo     # agent AI trong hạn mức, lệnh prompt injection b�
 npm run test:fork       # test trên chính các contract đã deploy
 ```
 
-`deploy:gasless` tự chuyển owner của FarmGame và ButlerAccount sang `OWNER_ADDRESS`, rồi ghi lại `prototype/chain-config.js` và `functions/_lib/relay-config.js`. Commit và push hai file này để Pages dùng địa chỉ mới.
+`deploy:gasless` tự chuyển owner của FarmGame, FarmCoop, FarmItems và ButlerAccount sang `OWNER_ADDRESS` (FarmQuests và DemoPriceFeed ở lại với ví deploy), rồi ghi lại `prototype/chain-config.js` và `functions/_lib/relay-config.js`. Commit và push hai file này để Pages dùng địa chỉ mới.
 
 `npm run smoke:gasless -- https://hanazono-b9s.pages.dev/api/relay` chạy cùng bài kiểm tra qua fee manager trên Pages, thay vì chạy fee manager trên máy.
 

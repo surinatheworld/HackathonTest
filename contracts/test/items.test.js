@@ -5,6 +5,8 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const DAY = 60;
 const usdc = (n) => ethers.parseUnits(String(n), 6);
 const avax = (n) => ethers.parseUnits(String(n), 18);
+// Daily loops below take a little more than one game day per round, so start them at the top of a day.
+const startOfDay = async () => time.increaseTo(Math.ceil(((await time.latest()) + 1) / DAY) * DAY + 1);
 const KIND = 1_000_000_000n;
 const TYPES = {
   ForwardRequest: [
@@ -115,10 +117,12 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     await game.connect(alice).plant(2, usdc(10));
     const [ids] = await game.cropsOf(alice);
     const crop = ids[ids.length - 1];
+    await startOfDay();
     for (let d = 0; d < 7; d++) { await game.connect(alice).water(crop); await time.increase(DAY); }
     await items.connect(alice).claimBadge(1005, 0);
     // Người nuôi cá: liquidity kept 3 days
     await pond.connect(alice).zapIn(usdc(50), 1);
+    await startOfDay();
     await items.connect(alice).startWatch(1003);
     expect(await items.canEarn(alice, 1003, 0)).to.equal(false);
     for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); } // daily check-in
@@ -126,6 +130,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     // Vay an toàn: debt with health >= 1.5 kept 3 days
     await coop.connect(alice).depositCollateral(avax(10));
     await coop.connect(alice).borrow(usdc(20)); // $100 collateral, 75/20 = 3.75
+    await startOfDay();
     await items.connect(alice).startWatch(1004);
     for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1004); } // daily check-in
     await items.connect(alice).claimBadge(1004, 0);
@@ -307,6 +312,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     const { alice, bob, token, coop, items } = await deploy();
     await coop.connect(alice).depositCollateral(avax(10));
     await coop.connect(alice).borrow(usdc(20));
+    await startOfDay();
     await items.connect(alice).startWatch(1004);
     for (let d = 0; d < 3; d++) {
       await coop.connect(bob).repay(alice.address, 1); // griefing: 0.000001 USDC of alice's debt every day

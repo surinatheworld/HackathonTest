@@ -22,6 +22,8 @@
       "function rewardReserve() view returns (uint256)",
       "function plant(uint8 tier, uint256 amount) returns (uint256)",
       "function harvest(uint256 cropId)",
+      "function cropYield(uint256 cropId) view returns (uint256)",
+      "event CropClosed(uint256 indexed cropId, address indexed owner, uint8 status, uint256 payout, uint256 points)",
       "function uproot(uint256 cropId)",
       "function water(uint256 cropId)",
       "function collect()",
@@ -82,7 +84,11 @@
       "function complete(uint256 hint)",
       "function hintFor(address,uint256) view returns (bool ready, uint256 hint)",
       "function rewardPool() view returns (uint256)",
+      "function owed(address) view returns (uint256)",
+      "function claimOwed()",
       "error NotDoneYet(uint256 quest)",
+      "error NothingOwed()",
+      "error NotAPlayer()",
       "error AllDone()",
       "error RewardPoolEmpty(uint256 available, uint256 needed)",
     ],
@@ -305,8 +311,8 @@
     const [coop, pond, gavax] = await Promise.all([readCoop(a), readPond(a), avaxR ? avaxR.balanceOf(a) : 0n]);
     Object.assign(next, { coop, pond, gavax: toAvax(gavax) });
     if (questsR) {
-      const q = await questsR.status(a).catch(() => null);
-      next.quest = q ? { index: Number(q.quest), ready: q.ready, reward: toNum(q.reward), done: Number(q.quest) >= CH.QUESTS.length } : CH.data?.quest || null;
+      const [q, owed] = await Promise.all([questsR.status(a).catch(() => null), questsR.owed(a).catch(() => 0n)]);
+      next.quest = q ? { index: Number(q.quest), ready: q.ready, reward: toNum(q.reward), owed: toNum(owed), done: Number(q.quest) >= CH.QUESTS.length } : CH.data?.quest || null;
     }
     next.items = await readItems(a, next.crops).catch((e) => { console.error("[items]", e); return CH.data?.items || null; });
     if (CH.account !== a) return; // the wallet changed while reading
@@ -372,19 +378,20 @@
     };
   }
 
-  /** The last `n` market offers, newest first. */
+  /** Up to `n` open market offers this player made or may take, newest first (see prototype/offers.js). */
   CH.loadOffers = async (n = 25) => {
-    if (!itemsR) return [];
+    if (!itemsR || !window.FarmOffers) return [];
     const count = Number(await itemsR.offerCount());
-    const ids = [];
-    for (let i = count - 1; i >= 0 && ids.length < n; i--) ids.push(i);
     const now = Math.floor(Date.now() / 1000);
-    const rows = await Promise.all(ids.map((i) => itemsR.offer(i)));
-    return rows.map((o, k) => ({
-      id: ids[k], maker: o.maker, taker: o.taker, expires: Number(o.expires), open: o.open && Number(o.expires) >= now,
-      give: o.giveIds.map((id, j) => ({ id: id.toString(), amount: Number(o.giveAmts[j]), ...CH.itemInfo(id) })),
-      want: o.wantIds.map((id, j) => ({ id: id.toString(), amount: Number(o.wantAmts[j]), ...CH.itemInfo(id) })),
-    }));
+    const read = async (i) => {
+      const o = await itemsR.offer(i);
+      return {
+        id: i, maker: o.maker, taker: o.taker, expires: Number(o.expires), open: o.open && Number(o.expires) >= now,
+        give: o.giveIds.map((id, j) => ({ id: id.toString(), amount: Number(o.giveAmts[j]), ...CH.itemInfo(id) })),
+        want: o.wantIds.map((id, j) => ({ id: id.toString(), amount: Number(o.wantAmts[j]), ...CH.itemInfo(id) })),
+      };
+    };
+    return window.FarmOffers.loadOffers(read, count, CH.account, now, { want: n });
   };
 
   async function readCoop(a) {
@@ -519,6 +526,14 @@
   // Harvest, then pick up the produce for the Kho đồ in the same flow (a second gasless signature).
   CH.harvest = async (id) => {
     const rc = await run(`Thu hoạch cây #${id}`, c.game, gameI, "harvest", [id], GAS.harvest);
+    // What really came back: principal plus the interest the reward pool could pay (the rest is owed, see Thu lãi).
+    for (const l of rc.logs || []) {
+      if (l.address.toLowerCase() !== c.game.toLowerCase()) continue;
+      try {
+        const ev = gameI.parseLog(l);
+        if (ev?.name === "CropClosed") rc.payout = toNum(ev.args.payout);
+      } catch {}
+    }
     if (itemsR) await CH.claimHarvest(id).catch((e) => console.warn("[items] claimHarvest", e));
     return rc;
   };
@@ -536,6 +551,9 @@
     return questsR.hintFor(CH.account, BigInt(q?.index ?? 0)).then(([, hint]) =>
       run(`Nhận thưởng nhiệm vụ: ${CH.QUESTS[q?.index]?.title || ""}`, c.quests, questsI, "complete", [hint], 300_000));
   };
+  CH.claimOwed = () => run("Nhận thưởng nhiệm vụ còn nợ", c.quests, questsI, "claimOwed", [], 200_000);
+  /** Interest a ripe crop would earn now (USDC), to warn when the reward pool cannot cover it. */
+  CH.cropYield = async (id) => toNum(await gameR.cropYield(id));
   CH.claimHarvest = (cropId) => run(`Nhận nông sản cây #${cropId}`, c.items, itemsI, "claimHarvest", [cropId], GI);
   CH.claimBadge = (id, arg = 0) => run(`Nhận huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "claimBadge", [id, arg], GI);
   CH.startWatch = (id) => run(`Điểm danh huy hiệu ${CATALOG[id]?.name || id}`, c.items, itemsI, "startWatch", [id], GI);
@@ -642,7 +660,7 @@
   CH.errMsg = (e) => {
     const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
     if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /user rejected|denied/i.test(m)) return "Bạn đã từ chối trong ví.";
-    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test.", NotEnoughPoints: "Chưa đủ điểm mùa.", Spoiled: "Nông sản đã hỏng (quá 7 ngày).", NotTradable: "Món này không đổi được (huy hiệu gắn với ví của bạn).", NotTransferable: "Vật phẩm chỉ đổi được qua chợ.", OfferClosed: "Đề nghị này đã xong hoặc đã huỷ.", OfferExpired: "Đề nghị đã hết hạn.", NotForYou: "Đề nghị này không dành cho bạn.", WrongItem: "Món đưa ra không khớp với đề nghị.", AlreadyClaimed: "Đã nhận nông sản của cây này rồi.", AlreadyEarned: "Bạn đã có huy hiệu này.", NotEligible: "Chưa đủ điều kiện.", NotForSale: "Món này không bán.", BadOffer: "Đề nghị không hợp lệ.", NotAHat: "Đó không phải nón.", NotDoneYet: "Bạn chưa làm xong nhiệm vụ này.", AllDone: "Bạn đã xong mọi nhiệm vụ.", RewardPoolEmpty: "Quỹ thưởng nhiệm vụ tạm hết, đội ngũ sẽ nạp thêm. Nhiệm vụ vẫn giữ nguyên, nhận sau nhé." };
+    const map = { NotRipe: "Cây chưa chín.", AlreadyWateredToday: "Hôm nay đã tưới cây này rồi.", NothingToSteal: "Vườn này chưa có điểm chín để hái.", Guarded: "Vườn đó có người giữ.", StealCooldown: "Mỗi ngày chỉ hái trộm được một lần.", FarmFull: "Vườn đã kín chỗ (12 cây).", NotAFarmer: "Phải có ít nhất một cây đang trồng mới được hái trộm.", CannotStealFromYourself: "Không thể hái trộm vườn của chính mình.", ExceedsBorrowLimit: "Vượt hạn mức vay (60% giá trị kho thóc).", NotLiquidatable: "Kho thóc này vẫn an toàn, chưa thể thanh lý.", NoDebt: "Không có khoản nợ nào.", StalePrice: "Giá AVAX từ Chainlink đã cũ, tạm dừng vay.", NoLiquidity: "Hợp tác xã tạm hết USDC cho vay.", InsufficientCollateral: "Kho thóc không đủ gAVAX.", Slippage: "Giá trong ao vừa đổi, thử lại.", InsufficientShares: "Bạn không có đủ phần trong ao.", EmptyPool: "Ao chưa có thanh khoản.", ERC20InsufficientBalance: "Ví chưa đủ USDC. Bấm Nhận 1.000 USDC test.", NotEnoughPoints: "Chưa đủ điểm mùa.", Spoiled: "Nông sản đã hỏng (quá 7 ngày).", NotTradable: "Món này không đổi được (huy hiệu gắn với ví của bạn).", NotTransferable: "Vật phẩm chỉ đổi được qua chợ.", OfferClosed: "Đề nghị này đã xong hoặc đã huỷ.", OfferExpired: "Đề nghị đã hết hạn.", NotForYou: "Đề nghị này không dành cho bạn.", WrongItem: "Món đưa ra không khớp với đề nghị.", AlreadyClaimed: "Đã nhận nông sản của cây này rồi.", AlreadyEarned: "Bạn đã có huy hiệu này.", NotEligible: "Chưa đủ điều kiện.", NotForSale: "Món này không bán.", BadOffer: "Đề nghị không hợp lệ.", NotAHat: "Đó không phải nón.", NotDoneYet: "Bạn chưa làm xong nhiệm vụ này.", AllDone: "Bạn đã xong mọi nhiệm vụ.", RewardPoolEmpty: "Quỹ thưởng nhiệm vụ tạm hết, đội ngũ sẽ nạp thêm. Phần thưởng của bạn vẫn được ghi lại, nhận sau nhé.", NothingOwed: "Bạn không có thưởng nào đang chờ.", NotAPlayer: "Chỉ ví người chơi mới làm được việc này (contract thì không).", FaucetCooldown: "Mỗi ví chỉ nhận tiền test 1 lần mỗi giờ. Chờ một lát rồi thử lại.", NotMinter: "Chỉ đội ngũ mới in được tiền test." };
     for (const [k, v] of Object.entries(map)) if (m.includes(k)) return v;
     return m.length > 180 ? m.slice(0, 180) + "…" : m;
   };
