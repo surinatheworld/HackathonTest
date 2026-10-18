@@ -157,7 +157,7 @@ const json = (status, body) =>
 // with the window. Limits per IP stay loose because a whole classroom can share one IP.
 const LIMITS = {
   ip: [{ n: 300, s: 60 }, { n: 10_000, s: 86_400 }],
-  status: [{ n: 120, s: 60 }], // GET endpoints: each one fans out to several RPC / Data API calls
+  status: [{ n: 300, s: 60 }], // GET endpoints: each one fans out to several RPC / Data API calls
   wallet: [{ n: 40, s: 60 }, { n: 500, s: 86_400 }],
 };
 const counters = new Map(); // key -> { n, exp }
