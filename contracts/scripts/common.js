@@ -73,4 +73,24 @@ function loadWebConfig() {
   return JSON.parse(m[1]);
 }
 
-module.exports = { TELEPORTER, DAY_LENGTH, load, save, blockchainID, requireTeleporter, writeFrontendConfig, loadWebConfig };
+/**
+ * The deploy key (mints test tokens, owns the demo price feed) must never be one of the fee manager's wallets:
+ * those keys live online on Cloudflare. Throws when they overlap or when no relayer is given.
+ */
+function assertSeparateKeys(deployer, relayers) {
+  if (!relayers || relayers.length === 0) throw new Error("Thiếu ví trả gas: đặt RELAYER_ADDRESSES hoặc RELAYER_PRIVATE_KEY.");
+  const d = String(deployer).toLowerCase();
+  if (relayers.some((r) => String(r).toLowerCase() === d))
+    throw new Error("Ví deploy trùng với một ví trả gas. Dùng một khoá deploy riêng, không bao giờ đưa lên Cloudflare.");
+}
+
+const FUJI_RPC = "https://api.avax-test.network/ext/bc/C/rpc";
+/** A Fuji provider that refuses to sign anything if the RPC is not chain 43113. */
+async function fujiProvider(ethers, url = process.env.FUJI_RPC_URL || FUJI_RPC) {
+  const provider = new ethers.JsonRpcProvider(url, 43113, { staticNetwork: true });
+  const id = BigInt(await provider.send("eth_chainId", []));
+  if (id !== 43113n) throw new Error(`RPC này là chain ${id}, không phải Fuji (43113). Dừng lại.`);
+  return provider;
+}
+
+module.exports = { TELEPORTER, DAY_LENGTH, load, save, blockchainID, requireTeleporter, writeFrontendConfig, loadWebConfig, assertSeparateKeys, fujiProvider };

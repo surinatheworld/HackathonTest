@@ -35,6 +35,18 @@ describe("Fuji gasless deployment (fork)", function () {
     expect(await butler.agentValidUntil()).to.be.gt(BigInt(Math.floor(Date.now() / 1000)));
   });
 
+  it("keeps the online fee manager wallets away from minting and ownership", async () => {
+    const fs = require("fs");
+    const path = require("path");
+    const src = fs.readFileSync(path.join(__dirname, "..", "..", "..", "functions", "_lib", "relay-config.js"), "utf8");
+    const relayers = JSON.parse(src.match(/export default ([\s\S]*);\s*$/)[1]).relayers.map((a) => a.toLowerCase());
+    const gavax = await ethers.getContractAt("GaslessAVAX", d.gavax);
+    const quests = await ethers.getContractAt("FarmQuests", d.quests);
+    const feed = await ethers.getContractAt("DemoPriceFeed", d.demoFeed);
+    expect(await quests.owner()).to.equal(d.owner);
+    for (const a of [await usdc.minter(), await gavax.minter(), await feed.owner(), d.owner]) expect(relayers).to.not.include(a.toLowerCase());
+  });
+
   it("plant and harvest on the deployed game", async () => {
     await usdc.connect(player).faucet();
     await usdc.connect(player).approve(game, U(100));

@@ -8,10 +8,14 @@
 /prototype/chain.js
   Cache-Control: no-cache
 
-# Nobody may frame the game (clickjacking the "sign" buttons).
+# Nobody may frame the game (clickjacking the "sign" buttons), and only our own scripts run: the in-game wallet key
+# is in localStorage, so an injected script must not run. The inline <script> in index.html is allowed by its sha256
+# only: after editing it, run `npm run csp` in contracts/ (a test fails until the hash matches).
+# The stricter full policy is report-only for now (the browser console lists what it would block, e.g. for Privy).
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'; script-src 'self' 'sha256-btJUGdVtGrG3UPpp3pfYOYPAqbUgcsiXJg4Nay8bmBM=' https://cdnjs.cloudflare.com https://esm.sh https://challenges.cloudflare.com
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-btJUGdVtGrG3UPpp3pfYOYPAqbUgcsiXJg4Nay8bmBM=' https://cdnjs.cloudflare.com https://esm.sh https://challenges.cloudflare.com; connect-src 'self' https://api.avax-test.network https://*.privy.io wss://*.privy.io https://esm.sh https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.org; frame-src https://auth.privy.io https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; frame-ancestors 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=()

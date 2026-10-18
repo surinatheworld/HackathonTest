@@ -45,7 +45,13 @@ async function deploy() {
     const { nonce, ...rest } = req;
     return fwd.connect(relayer).execute({ ...rest, signature });
   };
-  return { owner, alice, bob, token, gavax, feed, game, coop, pond, items, quests, relay };
+  const signed = async (who, target, fn, args, nonce) => {
+    const req = { from: who.address, to: await target.getAddress(), value: 0n, gas: 300_000n, nonce, deadline: (await time.latest()) + 600, data: target.interface.encodeFunctionData(fn, args) };
+    const signature = await who.signTypedData(domain, TYPES, req);
+    const { nonce: _, ...rest } = req;
+    return { ...rest, signature };
+  };
+  return { owner, alice, bob, token, gavax, feed, game, coop, pond, items, quests, relay, fwd, signed };
 }
 
 describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain", () => {
@@ -232,5 +238,56 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     expect(await quests.owed(zero.address)).to.equal(0n);
     expect(await token.balanceOf(zero.address)).to.equal(usdc(1_010));
     expect(await ethers.provider.getBalance(zero.address)).to.equal(0n);
+  });
+
+  it("a player alone in the village can pick from Vườn bác Tư (the built-in neighbour) and finish quests 12 and 13", async () => {
+    const { alice, bob, token, game, quests } = await deploy();
+    const N = await game.NEIGHBOUR();
+    const before = await game.farmers(N);
+    await expect(game.connect(alice).steal(N)).to.be.revertedWithCustomError(game, "NotAFarmer"); // needs a crop
+    await token.connect(alice).faucet();
+    await token.connect(alice).approve(game, ethers.MaxUint256);
+    await game.connect(alice).plant(0, usdc(10));
+    expect(await quests.check(alice, 12, 0)).to.equal(false);
+    await expect(game.connect(alice).steal(N)).to.emit(game, "Stolen").withArgs(alice.address, N, 3n);
+    expect((await game.farmers(alice)).points).to.equal(3n);
+    expect(await quests.check(alice, 12, 0)).to.equal(true);
+    await expect(game.connect(alice).steal(N)).to.be.revertedWithCustomError(game, "StealCooldown");
+    await game.connect(alice).setGuard(true);
+    expect(await quests.check(alice, 13, 0)).to.equal(true);
+    // Still open to everyone the next day, and the neighbour's own record never changes.
+    await token.connect(bob).faucet();
+    await token.connect(bob).approve(game, ethers.MaxUint256);
+    await game.connect(bob).plant(0, usdc(10));
+    await game.connect(bob).steal(N);
+    await time.increase(DAY);
+    await game.connect(alice).steal(N);
+    expect((await game.farmers(alice)).points).to.equal(6n);
+    expect(await game.farmers(N)).to.deep.equal(before);
+  });
+
+  it("many offline keys can play in one forwarder batch (a known testnet limit), but at most 1,000 USDC leaves the pool per hour", async () => {
+    const { alice, token, quests, fwd, signed } = await deploy();
+    const keys = Array.from({ length: 110 }, () => ethers.Wallet.createRandom());
+    const reqs = [];
+    for (const k of keys) reqs.push(await signed(k, token, "faucet", [], 0n), await signed(k, quests, "complete", [0], 1n));
+    await fwd.connect(alice).executeBatch(reqs, ethers.ZeroAddress, { gasLimit: 29_000_000 });
+    for (const k of keys) expect(await quests.progress(k.address)).to.equal(1n);
+    // 100 rewards of 10 USDC were paid, the other 10 players are owed theirs; the pool was not emptied.
+    expect(await quests.rewardPool()).to.equal(usdc(4_000));
+    const owedKeys = [];
+    for (const k of keys) if ((await quests.owed(k.address)) > 0n) owedKeys.push(k);
+    expect(owedKeys.length).to.equal(10);
+    expect(await quests.payableNow()).to.equal(0n);
+    // A real player this hour is owed too, and is paid once the next hour starts.
+    await token.connect(alice).faucet();
+    await quests.connect(alice).complete(0);
+    expect(await quests.owed(alice)).to.equal(usdc(10));
+    await expect(quests.connect(alice).claimOwed()).to.be.revertedWithCustomError(quests, "RewardPoolEmpty");
+    await time.increase(3600);
+    expect(await quests.payableNow()).to.equal(usdc(1_000));
+    await quests.connect(alice).claimOwed();
+    expect(await quests.owed(alice)).to.equal(0n);
+    expect(await quests.paidThisHour()).to.equal(usdc(10));
   });
 });

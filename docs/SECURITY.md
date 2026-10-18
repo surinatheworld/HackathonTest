@@ -47,17 +47,18 @@ Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có
 
 ### FarmQuests (Nhiệm vụ)
 
-- Có owner (hiện là ví deploy). Owner chỉ rút được thưởng chưa dùng, không sửa được tiến độ hay phần thưởng đang nợ.
-- Chỉ ví người chơi (trực tiếp hoặc qua forwarder) nhận được thưởng; contract thì không.
+- Có owner (bản đang chạy: ví deploy; từ lần deploy tới: ví owner, không bao giờ là ví trả gas). Owner chỉ rút được thưởng chưa dùng, không sửa được tiến độ hay phần thưởng đang nợ.
+- Chỉ ví người chơi (trực tiếp hoặc qua forwarder) nhận được thưởng; một contract không thể tự làm người chơi. Lưu ý: nhiều ví tạo sẵn ngoài mạng vẫn chơi được, kể cả gom chung trong một lần gọi `executeBatch` của forwarder (có test).
+- Trần chi thưởng: tối đa 1.000 USDC rời quỹ mỗi giờ (cả `complete` và `claimOwed`), phần vượt được ghi nợ. Một giao dịch không làm cạn quỹ được, và mỗi lần nạp quỹ dùng được lâu hơn.
 - Hết quỹ thì vẫn qua nhiệm vụ, thưởng được ghi nợ và trả sau bằng `claimOwed()`.
 - Mỗi nhiệm vụ chỉ nhận được một lần, theo đúng thứ tự.
 - Điều kiện được đọc trực tiếp từ FarmGame, FarmCoop, FarmPond và FarmItems.
-- 3 test trong `test/quests.test.js`: đi hết 18 nhiệm vụ, không nhảy cóc, chạy được gasless.
+- Test trong `test/quests.test.js`: đi hết 18 nhiệm vụ, không nhảy cóc, chạy được gasless, chơi một mình vẫn qua nhiệm vụ Hái trộm (vườn bác Tư), 110 ví trong một giao dịch chỉ lấy được 1.000 USDC.
 
-## Các tình huống có test (88 test thường, 11 test fork)
+## Các tình huống có test (101 test thường, 12 test fork)
 
 - **Quỹ thưởng không bị rút cạn**: lãi chỉ trả tới mức quỹ còn, gốc luôn được trả đủ, phần lãi thiếu được ghi lại để nhận sau (`coop-pond.test.js`).
-- **Tiền test**: chỉ ví deploy in được; vòi mỗi ví 1 lần/giờ; contract không nhận vòi được (`tokens.test.js`).
+- **Tiền test**: chỉ ví deploy in được; vòi mỗi ví 1 lần/giờ; một contract không tự nhận vòi được (`tokens.test.js`). Nhiều ví tạo sẵn thì vẫn nhận được, xem Giới hạn đã biết.
 - **Fee manager không bị lạm dụng**:
   - Chữ ký không dùng lại được. Không ai ký thay người khác được. Request hết hạn bị từ chối (`gasless.test.js`).
   - Ví chưa trồng cây không được trộm điểm. Đi kèm whitelist hàm, trần gas, và chặn `approve` tới ví lạ (smoke test: HTTP 403).
@@ -74,14 +75,17 @@ Slither: 0 High, không có reentrancy (mọi hàm thay đổi trạng thái có
   - Chỉ FarmGame gọi được nguồn lãi.
   - Không đổi được nguồn lãi khi còn tiền đang gửi trong đó.
   - Khi người chơi rút, game tự lấy tiền về từ nguồn lãi.
-- **Quản gia AI**:
+- **Quản gia tự động** (chưa dùng mô hình AI, bị giới hạn bằng hợp đồng):
   - Rule theo contract và hàm, có ghim tham số đầu tiên.
   - Có hạn mức mỗi ngày và kill switch.
   - Session key tự hết hạn.
 
 ## Giới hạn đã biết (testnet)
 
-- Vòi tiền test vẫn mở cho mọi ví (1 lần/giờ mỗi ví), nên người có nhiều ví vẫn cày được tiền test và điểm mùa, chỉ chậm hơn. Cách xử lý khi quỹ bị rút: `npm run top-up:quests` (quỹ nhiệm vụ), `FarmCoop.fund` (Hợp tác xã), `FarmGame.fundRewards` (quỹ thưởng). Bản mainnet cần đăng nhập bằng Privy kèm giới hạn lượt cho mỗi người.
+- Vòi tiền test vẫn mở cho mọi ví (1 lần/giờ mỗi ví), nên người có nhiều ví vẫn cày được tiền test và điểm mùa. Nhiều ví tạo sẵn ngoài mạng còn gom được vào một giao dịch qua `executeBatch` của forwarder (kiểm tra "không phải contract" chỉ chặn việc một contract làm người chơi). Quỹ nhiệm vụ có trần 1.000 USDC mỗi giờ nên không bị rút cạn trong một lần. Cách xử lý khi quỹ bị rút: `npm run top-up:quests` (quỹ nhiệm vụ), `FarmCoop.fund` (Hợp tác xã), `FarmGame.fundRewards` (quỹ thưởng). Bản mainnet cần đăng nhập bằng Privy kèm giới hạn lượt cho mỗi người.
 - Ví rỗng không trộm điểm được, nhưng vẫn lách được bằng một cây rất nhỏ.
 - `MockYieldSource` trả lãi từ quỹ lãi nạp sẵn (100.000 USDC test), không in thêm; hết quỹ thì ngừng trả lãi. Trên mainnet dùng `AaveV3YieldSource`, và phải kiểm toán độc lập trước khi giữ tiền thật.
+- Khóa trả gas nằm trên Cloudflare, nên phải coi là có thể lộ. Vì vậy ví trả gas chỉ giữ AVAX trả gas: `deploy:gasless` dừng nếu ví deploy (ví duy nhất in được tiền test, giữ DemoPriceFeed) hay owner trùng với ví trả gas, và `fund:relayers` chỉ nạp cho ví có trong `relay-config.js`. (Bản đang chạy trên Fuji vẫn dùng chung một ví cho tới lần deploy lại.)
+- Giới hạn tần suất của fee manager (theo ví, theo IP) và ngân sách gas theo giờ được đếm riêng ở từng trung tâm dữ liệu Cloudflare, nên kẻ phá dùng nhiều nơi trên thế giới được nhiều lượt hơn. Gas trên Fuji rẻ nên chưa phải vấn đề; mainnet cần bộ đếm chung (Durable Object hoặc KV).
+- Trang web chỉ chạy script của chính game (CSP `script-src`, script nội tuyến chỉ chạy theo mã băm, xem `_headers`). Thư viện Privy tải từ esm.sh, chưa khóa bản build; bản mainnet nên tự lưu thư viện trên site.
 - `DemoPriceFeed` do deployer điều khiển. Hợp tác xã chỉ dùng nó khi owner chủ động gọi `setOracle` để demo, bình thường dùng thẳng Chainlink.

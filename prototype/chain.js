@@ -67,6 +67,10 @@
       "function feePerUnit() view returns (uint256)",
       "function feePool() view returns (uint256)",
       "function offerCount() view returns (uint256)",
+      "function offersMade(address) view returns (uint256)",
+      "function offersBy(address, uint256) view returns (uint256)",
+      "function offersForCount(address) view returns (uint256)",
+      "function offersFor(address, uint256) view returns (uint256)",
       "function offer(uint256) view returns (tuple(address maker, address taker, uint64 expires, bool open, uint256[] giveIds, uint256[] giveAmts, uint256[] wantIds, uint256[] wantAmts))",
       "function claimHarvest(uint256 cropId)",
       "function discard(uint256 id, uint256 amount)",
@@ -152,6 +156,8 @@
   const questsR = c.quests ? new E.Contract(c.quests, ABI.quests, rp) : null;
   const questsI = new E.Interface(ABI.quests);
   CH.hasQuests = !!questsR;
+  // Vườn bác Tư: the built-in neighbour anyone can pick from (FarmGame.NEIGHBOUR), from the third Fuji deploy on.
+  CH.neighbour = c.neighbour || null;
   /** Nhiệm vụ, easy to hard. zone: where to go (a map zone or a panel), how: one plain sentence. Rewards are test USDC. */
   CH.QUESTS = [
     { ch: 1, title: "Nhận tiền thử", how: "Vào Ruộng rau, bấm Nhận 1.000 USDC test.", zone: "lend", reward: 10 },
@@ -166,7 +172,7 @@
     { ch: 3, title: "Vay ở Hợp tác xã", how: "Nhận gAVAX, gửi vào kho thóc rồi vay một ít USDC.", zone: "coop", reward: 40 },
     { ch: 3, title: "Trả hết nợ", how: "Trả hết khoản vay ở Hợp tác xã.", zone: "coop", reward: 50 },
     { ch: 4, title: "Đăng đề nghị đổi đồ", how: "Ở Chợ phiên, đăng một đề nghị đổi đồ.", zone: "market", reward: 30 },
-    { ch: 4, title: "Hái trộm", how: "Hỏi bạn bè địa chỉ ví, hái trộm điểm chín của họ ở Vườn bác Tư.", zone: "neighbor", reward: 30 },
+    { ch: 4, title: "Hái trộm", how: c.neighbour ? "Ở Vườn bác Tư, bấm Hái trộm vườn bác Tư (cần đang trồng một cây), hoặc hái vườn bạn bè." : "Hỏi bạn bè địa chỉ ví, hái trộm điểm chín của họ ở Vườn bác Tư.", zone: "neighbor", reward: 30 },
     { ch: 4, title: "Thuê người giữ vườn", how: "Ở Vườn bác Tư, bấm Thuê người giữ vườn.", zone: "neighbor", reward: 30 },
     { ch: 5, title: "Nông dân chăm chỉ", how: "Tưới cây 7 ngày liên tục, rồi nhận huy hiệu trong Kho đồ.", zone: "inventory", reward: 50 },
     { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ hệ số an toàn từ 1,5 và điểm danh mỗi ngày game, đủ 3 ngày thì nhận huy hiệu.", zone: "inventory", reward: 80 },
@@ -391,7 +397,16 @@
         want: o.wantIds.map((id, j) => ({ id: id.toString(), amount: Number(o.wantAmts[j]), ...CH.itemInfo(id) })),
       };
     };
-    return window.FarmOffers.loadOffers(read, count, CH.account, now, { want: n });
+    // The player's newest own offers and offers meant for them, by id (FarmItems from the third Fuji deploy on;
+    // an older contract has no offersFor, and the game then falls back to scanning the newest offers only).
+    const first = [];
+    try {
+      const me = CH.account;
+      const [made, forMe] = await Promise.all([itemsR.offersMade(me), itemsR.offersForCount(me)]);
+      const last = (k, fn) => Array.from({ length: Math.min(Number(k), n) }, (_, j) => fn(me, Number(k) - 1 - j));
+      first.push(...(await Promise.all([...last(made, itemsR.offersBy), ...last(forMe, itemsR.offersFor)])).map(Number));
+    } catch {}
+    return window.FarmOffers.loadOffers(read, count, CH.account, now, { want: n, first });
   };
 
   async function readCoop(a) {

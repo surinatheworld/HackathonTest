@@ -7,14 +7,14 @@ Fee manager là file `functions/api/relay.js`. Cloudflare Pages tự nhận thư
 1. Mở dashboard Cloudflare → **Workers & Pages** → project **hanazono** → **Settings** → **Variables and Secrets** (hoặc **Environment variables**).
 2. Ở môi trường **Production**, bấm **Add** và chọn loại **Secret** (Encrypt):
    - Variable name: `RELAYER_PRIVATE_KEY`
-   - Value: khóa riêng của ví trả gas `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`. Khóa này là dòng `PRIVATE_KEY=` trong `contracts/.env` trên máy đã deploy. Đây là ví testnet, không giữ tiền thật.
+   - Value: khóa riêng của ví trả gas `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`, là dòng `RELAYER_PRIVATE_KEY=` trong `contracts/.env`. Đây là ví testnet, chỉ giữ AVAX trả gas. **Không bao giờ** đưa `PRIVATE_KEY` (ví deploy, ví duy nhất in được tiền test) lên Cloudflare.
 3. (Không bắt buộc) Thêm biến thường `FUJI_RPC_URL` nếu muốn dùng RPC khác RPC công khai.
 4. Vào **Deployments**, bấm **Retry deployment** trên bản mới nhất, hoặc push một commit bất kỳ, để Pages nạp biến mới.
 5. Kiểm tra: mở https://hanazono-b9s.pages.dev/api/relay. Phải thấy `"ready": true` và địa chỉ `0x2683…f4FC`.
 
 Khi chưa có secret: người chơi dùng **MetaMask** vẫn chơi được, game tự chuyển sang tự trả gas. **Ví trong game** thì sẽ báo "Fee manager chưa bật".
 
-**Nạp gas cho fee manager:** gửi AVAX test (Fuji) vào `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`. Phí trên Fuji rất thấp nên 0,3 AVAX đủ cho rất nhiều lượt.
+**Nạp gas cho fee manager:** `npm run fund:relayers` (ví deploy nạp cho các ví trả gas có trong `relay-config.js`), hoặc gửi AVAX test (Fuji) vào `0x2683F2Ef9bF63F0C123D5232Cd651a6B6978f4FC`. Phí trên Fuji rất thấp nên 0,3 AVAX đủ cho rất nhiều lượt.
 
 **Chính sách của fee manager** (`functions/_lib/relay-core.js`):
 - Chỉ trả gas cho hàm người chơi trên FarmGame, FarmCoop, FarmPond, GaslessUSDC và GaslessAVAX. Hàm owner như `invest`, `setOracle` thì owner tự trả gas.
@@ -23,21 +23,26 @@ Khi chưa có secret: người chơi dùng **MetaMask** vẫn chơi được, ga
 - Chữ ký, nonce và hạn được kiểm tra trên chain qua `FarmForwarder.verify`.
 - Mô phỏng lời gọi trước khi gửi để trả lý do lỗi rõ ràng.
 
+**Sửa script trong `index.html`?** Chạy `npm run csp` trong `contracts/` để cập nhật mã băm trong `_headers`, nếu không trình duyệt sẽ chặn script đó (test `site-and-scripts.test.js` báo lỗi trước).
+
 ## 2. Deploy lại contract (khi cần)
 
 ```bash
 cd contracts
 npm install
-npm run wallet          # tạo PRIVATE_KEY (ví deploy + trả gas) và AGENT_PRIVATE_KEY trong .env
-# nạp Fuji AVAX cho ví deploy, đặt OWNER_ADDRESS=0x… (ví dự án) trong .env
+npm run wallet -- --split-relayer  # lần đầu sau Vòng 4: khóa cũ thành RELAYER_PRIVATE_KEY (ví trả gas, giữ nguyên AVAX),
+                                   # tạo PRIVATE_KEY mới (ví deploy, chỉ ở máy này) và AGENT_PRIVATE_KEY
+# nạp Fuji AVAX cho ví deploy mới, đặt OWNER_ADDRESS=0x… (ví dự án) trong .env
+# ví trả gas lấy từ RELAYER_PRIVATE_KEY (hoặc đặt RELAYER_ADDRESSES=0x…,0x…); deploy dừng nếu trùng ví deploy hay owner
 npm run deploy:gasless  # toàn bộ contract, nạp quỹ thưởng, HTX, Ao cá, cấp quyền agent, chuyển owner
 npm run verify:fuji     # verify source trên Snowtrace
-npm run smoke:gasless   # ví mới 0 AVAX: ruộng, vườn, HTX, ao cá qua fee manager
-npm run butler:demo     # agent AI trong hạn mức, lệnh prompt injection bị revert
+npm run smoke:gasless   # ví mới 0 AVAX: ruộng, vườn, HTX, ao cá qua fee manager (ghi tx vào deployments/fuji-proof.json)
+BUTLER_ONCHAIN_ATTACK=1 npm run butler:demo  # quản gia gửi tiền trong hạn mức, lệnh lừa bị hợp đồng chặn (cũng ghi tx)
+npm run proof:readme    # viết lại phần "Bằng chứng trên Fuji" trong README và link tx bị chặn trong game
 npm run test:fork       # test trên chính các contract đã deploy
 ```
 
-`deploy:gasless` tự chuyển owner của FarmGame, FarmCoop, FarmItems và ButlerAccount sang `OWNER_ADDRESS` (FarmQuests và DemoPriceFeed ở lại với ví deploy), rồi ghi lại `prototype/chain-config.js` và `functions/_lib/relay-config.js`. Commit và push hai file này để Pages dùng địa chỉ mới.
+`deploy:gasless` tự chuyển owner của FarmGame, FarmCoop, FarmItems, FarmQuests và ButlerAccount sang `OWNER_ADDRESS` (DemoPriceFeed ở lại với ví deploy), ghi địa chỉ vườn bác Tư vào cấu hình game, rồi ghi lại `prototype/chain-config.js` và `functions/_lib/relay-config.js`. Commit và push hai file này để Pages dùng địa chỉ mới.
 
 `npm run smoke:gasless -- https://hanazono-b9s.pages.dev/api/relay` chạy cùng bài kiểm tra qua fee manager trên Pages, thay vì chạy fee manager trên máy.
 

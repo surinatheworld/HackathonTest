@@ -1101,7 +1101,7 @@
     }
     cbody.appendChild(fig); cbody.appendChild(leg);
     keyEl = el('div', 'mm-key',
-      '<span>' + SVG.kPlayer + 'Bạn</span><span>' + SVG.kButler + 'Quản gia AI</span><span>' + SVG.kLetter + 'Thư giao dịch</span>' +
+      '<span>' + SVG.kPlayer + 'Bạn</span><span>' + SVG.kButler + 'Quản gia tự động</span><span>' + SVG.kLetter + 'Thư giao dịch</span>' +
       '<span>' + SVG.kView + 'Vùng đang nhìn</span><span>' + SVG.kDest + 'Điểm đến</span>' +
       '<span class="mm-keys"><span class="mm-kbd">M</span>thu gọn bản đồ nhỏ</span><span><span class="mm-kbd">Esc</span>đóng</span>');
     card.appendChild(chead); card.appendChild(cbody); card.appendChild(keyEl);

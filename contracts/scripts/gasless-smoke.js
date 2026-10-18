@@ -8,6 +8,13 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { ethers } = require("ethers");
 const { load } = require("./common");
+const { recordProof } = require("./proof");
+
+// Plain words for the README proof block (npm run proof:readme).
+const SAY = {
+  "faucet()": "nhận USDC test", "plant(cây ớt, 10 USDC)": "trồng 10 USDC", "deposit(50 USDC)": "gửi 50 USDC vào Ruộng rau",
+  "depositCollateral(5 gAVAX)": "gửi 5 gAVAX ở Hợp tác xã", "borrow(10 USDC)": "vay 10 USDC", "zapIn(100 USDC)": "thả 100 USDC xuống Ao cá",
+};
 
 const TYPES = {
   ForwardRequest: [
@@ -26,7 +33,9 @@ async function main() {
   const relayUrl = process.argv[2];
   const core = relayUrl ? null : await import(pathToFileURL(path.join(__dirname, "..", "..", "functions", "_lib", "relay-core.js")).href);
   const HARDHAT_0 = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-  const env = { RELAYER_PRIVATE_KEY: local ? HARDHAT_0 : process.env.RELAYER_PRIVATE_KEY || process.env.PRIVATE_KEY, FUJI_RPC_URL: rpc };
+  // On Fuji the in-process fee manager uses the relayer key only: the deploy key is never a gas wallet.
+  if (!local && !relayUrl && !process.env.RELAYER_PRIVATE_KEY) throw new Error("Đặt RELAYER_PRIVATE_KEY trong contracts/.env, hoặc truyền relayUrl.");
+  const env = { RELAYER_PRIVATE_KEY: local ? HARDHAT_0 : process.env.RELAYER_PRIVATE_KEY, FUJI_RPC_URL: rpc };
   const config = { chainId, rpc, forwarder: d.forwarder, game: d.game, usdc: d.usdc, gavax: d.gavax, coop: d.coop, pond: d.pond };
 
   const player = ethers.Wallet.createRandom();
@@ -36,6 +45,15 @@ async function main() {
   const gameI = new ethers.Interface(["function plant(uint8,uint256)", "function deposit(uint256)", "function cropsOf(address) view returns (uint256[] ids, tuple(address owner,uint8 tier,uint8 status,uint64 plantedAt,uint64 lastWateredDay,uint256 amount,uint256 payout)[] list)", "function lends(address) view returns (uint256,uint256,uint64)"]);
   const domain = { name: "NongTraiDeFi", version: "1", chainId, verifyingContract: d.forwarder };
 
+  // Polls the receipt itself: waitForTransaction can miss a tx mined before it starts listening and then wait for a
+  // block that a hardhat node (automine) never makes.
+  const receipt = async (hash) => {
+    for (const end = Date.now() + 120000; Date.now() < end; await new Promise((r) => setTimeout(r, 500))) {
+      const rc = await provider.getTransactionReceipt(hash);
+      if (rc) return rc;
+    }
+    throw new Error(`timeout waiting for ${hash}`);
+  };
   const send = async (label, to, data, gas = 300000) => {
     const nonce = await fwd.nonces(player.address);
     const deadline = Math.floor(Date.now() / 1000) + 600;
@@ -46,8 +64,9 @@ async function main() {
       : await core.relay(body, env, config);
     const j = await r.json();
     if (r.status !== 200) throw new Error(`${label}: ${r.status} ${j.error}`);
-    const rc = await provider.waitForTransaction(j.hash, 1, 120000);
+    const rc = await receipt(j.hash);
     console.log(`✓ ${label} · tx ${j.hash} · gas ${rc.gasUsed} paid by ${j.relayer}`);
+    if (!local && SAY[label] && rc.status === 1) recordProof({ forwarder: d.forwarder, butler: d.butler }, { step: label, text: SAY[label], hash: j.hash, contract: to });
   };
 
   await send("faucet()", d.usdc, usdcI.encodeFunctionData("faucet"));

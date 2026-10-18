@@ -21,6 +21,10 @@ contract FarmGame is ERC2771Context, ReentrancyGuard {
     uint256 private constant YEAR_DAYS = 365;
     uint256 public constant LEND_APY_BPS = 400;
     uint16 public constant MAX_ACTIVE_CROPS = 12;
+    /// Vườn bác Tư: a built-in neighbour nobody holds a key for. It never guards and always has 3 points to pick,
+    /// so a player alone in the village can still learn "hái trộm" and go on with the quests.
+    address public constant NEIGHBOUR = address(uint160(uint256(keccak256("nong-trai.bac-tu"))));
+    uint256 public constant NEIGHBOUR_POINTS = 3;
 
     enum Status {
         None,
@@ -307,13 +311,14 @@ contract FarmGame is ERC2771Context, ReentrancyGuard {
         Farmer storage v = farmers[victim];
         Farmer storage t = farmers[_msgSender()];
         if (t.activeCrops == 0) revert NotAFarmer();
-        if (v.guarded) revert Guarded();
+        bool neighbour = victim == NEIGHBOUR;
+        if (!neighbour && v.guarded) revert Guarded();
         uint64 d = today();
         if (t.lastStealDay == d && t.lastStealDay != 0) revert StealCooldown();
-        uint256 n = (v.ripePoints * 40) / 100;
+        uint256 n = neighbour ? NEIGHBOUR_POINTS : (v.ripePoints * 40) / 100;
         if (n == 0) revert NothingToSteal();
         t.lastStealDay = d;
-        v.ripePoints -= n;
+        if (!neighbour) v.ripePoints -= n;
         t.points += n;
         emit Stolen(_msgSender(), victim, n);
     }

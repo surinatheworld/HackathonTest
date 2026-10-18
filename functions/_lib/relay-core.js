@@ -3,7 +3,7 @@
 // (functions/api/relay.js) and the local dev server.
 import { ethers } from "./ethers.min.js";
 
-const FORWARDER_ABI = [
+export const FORWARDER_ABI = [
   "function execute((address from, address to, uint256 value, uint256 gas, uint48 deadline, bytes data, bytes signature) request) payable",
   "function executeBatch((address from, address to, uint256 value, uint256 gas, uint48 deadline, bytes data, bytes signature)[] requests, address refundReceiver) payable",
   "event ExecutedForwardRequest(address indexed signer, uint256 nonce, bool success)",

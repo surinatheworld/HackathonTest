@@ -4,7 +4,8 @@
 // BUTLER_ONCHAIN_ATTACK=1 also sends that transfer as a real transaction, so the revert is visible on Snowtrace.
 require("dotenv").config();
 const { ethers } = require("ethers");
-const { load, loadWebConfig } = require("./common");
+const { load, loadWebConfig, fujiProvider } = require("./common");
+const { recordProof } = require("./proof");
 const abi = (n) => require(`../artifacts/contracts/${n}.json`).abi;
 
 async function main() {
@@ -13,7 +14,8 @@ async function main() {
   if (!fuji?.butler) throw new Error("Chưa có địa chỉ ButlerAccount. Chạy npm run sync-config -- <ví owner> trước.");
   if (!process.env.AGENT_PRIVATE_KEY) throw new Error("Thiếu AGENT_PRIVATE_KEY trong contracts/.env (npm run wallet).");
 
-  const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL || fuji.rpc || "https://api.avax-test.network/ext/bc/C/rpc");
+  const provider = await fujiProvider(ethers, process.env.FUJI_RPC_URL || fuji.rpc || undefined);
+  const stack = { forwarder: fuji.forwarder, butler: fuji.butler };
   const agent = new ethers.Wallet(process.env.AGENT_PRIVATE_KEY, provider);
   const usdc = new ethers.Contract(fuji.usdc, abi(fuji.game ? "gasless/GaslessUSDC.sol/GaslessUSDC" : "cchain/MockUSDC.sol/MockUSDC"), provider);
   const vault = new ethers.Contract(fuji.game || fuji.vault, abi(fuji.game ? "gasless/FarmGame.sol/FarmGame" : "cchain/FarmVault.sol/FarmVault"), provider);
@@ -43,6 +45,7 @@ async function main() {
     const tx = await butler.execute(vault.target, vault.interface.encodeFunctionData("deposit", [amt]));
     await tx.wait();
     console.log(`Agent: gửi ${fmt(amt)} USDC vào Ruộng rau ✓ · tx ${tx.hash}`);
+    recordProof(stack, { step: "butler-deposit", text: `quản gia gửi ${fmt(amt)} USDC trong hạn mức`, hash: tx.hash, contract: fuji.butler });
   } else {
     console.log("Agent: hết hạn mức hôm nay hoặc ButlerAccount hết USDC, bỏ qua bước gửi tiền.");
   }
@@ -70,6 +73,7 @@ async function main() {
     const tx = await butler.execute(usdc.target, tries[0][2], { gasLimit: 200_000 });
     const rc = await provider.waitForTransaction(tx.hash);
     console.log(`  Gửi thật lên chain: transfer(attacker) → ${rc.status === 0 ? "REVERT (bị contract chặn)" : "KHÔNG bị chặn!"} · tx ${tx.hash}`);
+    if (rc.status === 0) recordProof(stack, { step: "butler-blocked", text: "lệnh chuyển hết tiền cho kẻ lạ bị hợp đồng chặn", hash: tx.hash, contract: fuji.butler, ok: false });
   }
   console.log(`ButlerAccount vẫn giữ ${fmt(await usdc.balanceOf(butler.target))} USDC.`);
 }

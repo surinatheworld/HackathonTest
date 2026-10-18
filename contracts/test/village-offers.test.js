@@ -25,7 +25,7 @@ describe("Village indexer (Avalanche Data API)", () => {
       const u = String(url);
       const body = u.includes(`/addresses/${config.forwarder}/transactions`) ? { transactions: pages.forwarder || [] }
         : u.includes(`/tokens/${config.usdc}/transfers`) ? { transfers: pages.transfers || [] }
-        : u.includes(`/addresses/${config.butler}/transactions`) ? { transactions: [] }
+        : u.includes(`/addresses/${config.butler}/transactions`) ? { transactions: pages.butler || [] }
         : { transactions: [], transfers: [] };
       return { ok: true, json: async () => body };
     };
@@ -38,6 +38,19 @@ describe("Village indexer (Avalanche Data API)", () => {
     const v = await build({}, config);
     expect(v.stats.sponsoredTxs).to.equal(1);
     expect(v.stats.relayersUsed).to.equal(1);
+  });
+
+  it("counts relayed calls that carry only the 4-byte selector (no methodName), as the Data API returns them", async () => {
+    // executeBatch((address,address,uint256,uint256,uint48,bytes,bytes)[],address) = 0xccf96b4a
+    const bare = (from, i) => ({ nativeTransaction: { method: { callType: "CONTRACT_CALL", methodHash: "0xccf96b4a" }, from: { address: from }, gasUsed: "100000", gasPrice: "1", blockTimestamp: 0, txHash: H(i) } });
+    serve({ forwarder: [bare(POOL, 1), bare(A(0xbad), 2)] });
+    const v = await build({}, config);
+    expect(v.stats.sponsoredTxs).to.equal(1);
+    expect(v.stats.gasPaidAvax).to.be.greaterThan(0);
+    // ButlerAccount.execute(address,bytes) = 0x1cff79cd; a refused call (txStatus "0") shows as blocked
+    serve({ butler: [{ nativeTransaction: { method: { methodHash: "0x1cff79cd" }, from: { address: A(0xa9e) }, txStatus: "0", blockTimestamp: 5, txHash: H(7) } }] });
+    const b = await build({}, config);
+    expect(b.butler).to.deep.equal([{ by: A(0xa9e), ok: false, at: 5, tx: H(7) }]);
   });
 
   it("drops Data API rows whose address or tx hash is not plain hex, so nothing odd reaches the page", async () => {
@@ -62,6 +75,17 @@ describe("Chợ đổi đồ picker (prototype/offers.js)", () => {
     const shown = await loadOffers(async (i) => rows[i], rows.length, ME, 1000);
     expect(shown.map((o) => o.id)).to.include(0);
     expect(shown.filter((o) => o.maker === SPAM).length).to.equal(3);
+  });
+
+  it("300 public offers from 100 makers cannot push out an older offer meant for the player (read by id first)", async () => {
+    const rows = [{ id: 0, maker: ALICE, taker: ME, expires: 9e9, open: true }, { id: 1, maker: ME, taker: ZERO, expires: 9e9, open: true }];
+    for (let i = 2; i < 302; i++) rows.push({ id: i, maker: A(0x1000 + (i % 100)), taker: ZERO, expires: 9e9, open: true });
+    const before = await loadOffers(async (i) => rows[i], rows.length, ME, 1000);
+    expect(before.map((o) => o.id)).to.not.include(0); // scanning the newest alone misses it
+    const shown = await loadOffers(async (i) => rows[i], rows.length, ME, 1000, { first: [0, 1] });
+    expect(shown.map((o) => o.id)).to.include.members([0, 1]);
+    expect(shown.length).to.equal(25);
+    expect(new Set(shown.map((o) => o.id)).size).to.equal(25);
   });
 
   it("keeps the player's own offers and offers meant for them; skips closed, expired and other people's private ones", () => {

@@ -82,6 +82,10 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
     /// Cheap facts for FarmQuests, so quests never scan a player's whole history.
     mapping(address => bool) public gotProduce; // claimed produce at least once
     mapping(address => uint256) public offersMade; // market offers posted
+    /// offer ids each player made, and the ids of private offers meant for them, so the market can always show a
+    /// player's own offers however many public offers other wallets post
+    mapping(address => uint256[]) public offersBy;
+    mapping(address => uint256[]) public offersFor;
     mapping(address => uint64) public fishSince;
     mapping(address => uint64) public fishSeen; // last day the player checked in at Ao cá
     mapping(address => uint256) public fishShares; // pond shares at the start; holding fewer restarts the clock
@@ -254,6 +258,10 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         return _offers.length;
     }
 
+    function offersForCount(address user) external view returns (uint256) {
+        return offersFor[user].length;
+    }
+
     function offer(uint256 offerId) external view returns (Offer memory) {
         return _offers[offerId];
     }
@@ -418,6 +426,8 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         o.wantAmts = legs.wantAmts;
         offerId = _offers.length - 1;
         offersMade[u]++;
+        offersBy[u].push(offerId);
+        if (taker != address(0)) offersFor[taker].push(offerId);
         emit OfferMade(offerId, u, taker, o.expires, fee);
     }
 

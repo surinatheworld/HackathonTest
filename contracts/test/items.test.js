@@ -62,7 +62,19 @@ async function deploy() {
   };
   /** produce batches are dated by the day the crop ripened */
   const produceId = async (kind, crop) => BigInt(kind) * KIND + (await game.readyAt(crop)) / BigInt(DAY);
-  return { owner, alice, bob, carol, token, gavax, feed, game, coop, pond, items, relay, grow, produceId };
+  /** many requests `who` signed, sent in one forwarder batch (one block) */
+  const batch = async (who, calls) => {
+    let nonce = await fwd.nonces(who.address);
+    const reqs = [];
+    for (const [target, fn, args] of calls) {
+      const req = { from: who.address, to: await target.getAddress(), value: 0n, gas: 400_000n, nonce: nonce++, deadline: (await time.latest()) + 600, data: target.interface.encodeFunctionData(fn, args) };
+      const signature = await who.signTypedData(domain, TYPES, req);
+      const { nonce: _, ...rest } = req;
+      reqs.push({ ...rest, signature });
+    }
+    return fwd.connect(relayer).executeBatch(reqs, ethers.ZeroAddress, { gasLimit: 29_000_000 });
+  };
+  return { owner, alice, bob, carol, token, gavax, feed, game, coop, pond, items, relay, grow, produceId, batch };
 }
 
 describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () => {
@@ -349,5 +361,33 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     expect(amts[0]).to.equal(3n);
     expect(await items.kindOf(ids[0])).to.equal(1n);
     expect(await ethers.provider.getBalance(zero.address)).to.equal(0n);
+  });
+
+  it("a pile of public offers cannot hide a private offer: offersFor and offersBy list them by player", async () => {
+    const { owner, alice, bob, carol, game, items, produceId, batch } = await deploy();
+    await items.connect(owner).setFee(0);
+    await game.connect(bob).plant(0, usdc(100)); // crop 1
+    await game.connect(carol).plant(0, usdc(100)); // crop 2
+    await time.increase(7 * DAY + 1);
+    for (const [p, id] of [[bob, 1], [carol, 2]]) { await game.connect(p).harvest(id); await items.connect(p).claimHarvest(id); }
+    const bchili = await produceId(1, 1), cchili = await produceId(1, 2);
+    await items.connect(bob).makeOffer({ giveIds: [bchili], giveAmts: [1], wantIds: [2n * KIND], wantAmts: [1] }, alice, 7);
+    // 250 public offers in 10 blocks: make 5, cancel them to get the escrow back, repeat.
+    const legs = { giveIds: [cchili], giveAmts: [1], wantIds: [2n * KIND], wantAmts: [1] };
+    for (let b = 0, id = 1; b < 10; b++) {
+      const calls = [];
+      for (let g = 0; g < 5; g++, id += 5) {
+        for (let k = 0; k < 5; k++) calls.push([items, "makeOffer", [legs, ethers.ZeroAddress, 1]]);
+        for (let k = 0; k < 5; k++) calls.push([items, "cancelOffer", [id + k]]);
+      }
+      await batch(carol, calls);
+    }
+    expect(await items.offerCount()).to.equal(251n);
+    expect(await items.offersForCount(alice)).to.equal(1n);
+    expect(await items.offersFor(alice, 0)).to.equal(0n);
+    expect((await items.offer(await items.offersFor(alice, 0))).maker).to.equal(bob.address);
+    expect(await items.offersBy(bob, 0)).to.equal(0n);
+    expect(await items.offersMade(carol)).to.equal(250n);
+    expect(await items.offersBy(carol, 249)).to.equal(250n);
   });
 });

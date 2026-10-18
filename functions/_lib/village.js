@@ -2,7 +2,7 @@
 // subgraph of our own) and turns it into what the game shows: fee manager totals, a village news feed, the
 // quest leaderboard and recently active neighbours. Cached for 30 s per Cloudflare isolate and colo.
 import { ethers } from "./ethers.min.js";
-import { relayerKeys, PublicError } from "./relay-core.js";
+import { relayerKeys, PublicError, FORWARDER_ABI } from "./relay-core.js";
 
 const API = "https://data-api.avax.network/v1/chains";
 const TTL_S = 30;
@@ -32,6 +32,12 @@ const usd = (v) => Number(v) / 1e6;
 // it into the page.
 const isAddr = (a) => /^0x[0-9a-f]{40}$/.test(a);
 const isHash = (h) => typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h);
+// The Data API often leaves out methodName for unverified contracts and only gives the 4-byte methodHash, so calls
+// are matched by selector, computed from the same ABI strings the fee manager uses.
+const sels = (abi) => new Set(new ethers.Interface(abi).fragments.filter((f) => f.type === "function").map((f) => f.selector));
+const FWD_SEL = sels(FORWARDER_ABI.filter((f) => /function execute/.test(f)));
+const BUTLER_SEL = sels(["function execute(address target, bytes data)"]);
+export const isCall = (t, set) => set.has(lc(t.method?.methodHash)) || /^execute/.test(t.method?.methodName || "");
 
 function label(t, c) {
   const from = lc(t.from.address), to = lc(t.to.address), v = usd(t.value);
@@ -71,7 +77,7 @@ export async function build(env, config) {
   let gasWei = 0n, day = 0, sponsored = 0;
   const relayers = new Set();
   for (const { nativeTransaction: t } of txs.items) {
-    if (!/^execute/.test(t.method?.methodName || "") || !pool.has(lc(t.from?.address))) continue;
+    if (!isCall(t, FWD_SEL) || !pool.has(lc(t.from?.address))) continue;
     sponsored++;
     gasWei += BigInt(t.gasUsed || 0) * BigInt(t.gasPrice || 0);
     if (now - t.blockTimestamp < 86_400) day++;
@@ -123,7 +129,7 @@ export async function build(env, config) {
     // The AI butler's own account: what its agent key did, and what the contract refused.
     butler: butlerTxs.items
       .map(({ nativeTransaction: t }) => t)
-      .filter((t) => /^execute/.test(t.method?.methodName || "") && isAddr(lc(t.from?.address)) && isHash(t.txHash))
+      .filter((t) => isCall(t, BUTLER_SEL) && isAddr(lc(t.from?.address)) && isHash(t.txHash))
       .slice(0, 8)
       .map((t) => ({ by: lc(t.from.address), ok: t.txStatus === "1", at: t.blockTimestamp, tx: t.txHash })),
   };
@@ -136,7 +142,7 @@ export async function village(env, config) {
   const fresh = (m) => m && Date.now() / 1000 - m.updatedAt < TTL_S;
   if (fresh(memo)) return memo;
   const cache = globalThis.caches?.default;
-  const key = "https://village.nongtrai.internal/v2";
+  const key = "https://village.nongtrai.internal/v3";
   let cached = null;
   try {
     const hit = cache && (await cache.match(key));

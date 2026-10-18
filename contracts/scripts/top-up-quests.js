@@ -5,11 +5,11 @@
 // by FarmQuests; on testnet the team's wallet gets the test USDC from the open faucet token.
 require("dotenv").config();
 const { ethers } = require("ethers");
-const { load } = require("./common");
+const { load, fujiProvider } = require("./common");
 
 async function main() {
   const d = load("fuji-gasless");
-  const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc", 43113);
+  const provider = await fujiProvider(ethers);
   const me = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
   const usdc = new ethers.Contract(d.usdc, ["function mint(address,uint256)", "function transfer(address,uint256) returns (bool)", "function balanceOf(address) view returns (uint256)"], me);
   const target = ethers.parseUnits(process.env.QUEST_POOL || "20000", 6);

@@ -50,10 +50,14 @@ interface IQuestItems {
 /// still moves on to the next quest and the reward is owed, paid by claimOwed() once the pool is topped up, so an
 /// empty pool never freezes the learning path. The owner (the deployer today, the team multisig later) can only take
 /// unused rewards back; it cannot change anyone's progress or what they are owed.
+/// At most HOURLY_PAYOUT_CAP leaves the pool per hour (complete and claimOwed together); the rest is owed. Many
+/// throwaway wallets signed offline can still play (even inside one forwarder batch), but they cannot empty the
+/// pool in one go, and a top-up lasts for the real players.
 contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant COUNT = 18;
+    uint256 public constant HOURLY_PAYOUT_CAP = 1_000e6;
 
     IQuestGame public immutable game;
     IQuestCoop public immutable coop;
@@ -65,6 +69,9 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
     mapping(address => uint256) public progress;
     /// rewards earned while the pool was empty, not paid yet
     mapping(address => uint256) public owed;
+    /// the hour (block.timestamp / 3600) paidThisHour counts for
+    uint256 public payoutHour;
+    uint256 public paidThisHour;
 
     event QuestCompleted(address indexed user, uint256 indexed quest, uint256 reward);
     event RewardOwed(address indexed user, uint256 indexed quest, uint256 amount);
@@ -136,25 +143,45 @@ contract FarmQuests is ERC2771Context, Ownable, ReentrancyGuard {
         reward = rewardOf(quest);
         progress[u] = quest + 1;
         emit QuestCompleted(u, quest, reward);
-        if (usdc.balanceOf(address(this)) < reward) {
+        if (_room() < reward) {
             owed[u] += reward;
             emit RewardOwed(u, quest, reward);
         } else {
+            paidThisHour += reward;
             usdc.safeTransfer(u, reward);
         }
     }
 
-    /// Collect rewards that were owed while the pool was empty: as much as the pool holds now.
+    /// Collect rewards that were owed while the pool was empty (or this hour's payouts were used up): as much as can
+    /// be paid now.
     function claimOwed() external nonReentrant returns (uint256 paid) {
         address u = _msgSender();
         uint256 due = owed[u];
         if (due == 0) revert NothingOwed();
-        uint256 pool = usdc.balanceOf(address(this));
-        paid = due < pool ? due : pool;
+        uint256 room = _room();
+        paid = due < room ? due : room;
         if (paid == 0) revert RewardPoolEmpty(0, due);
         owed[u] = due - paid;
+        paidThisHour += paid;
         emit OwedPaid(u, paid, due - paid);
         usdc.safeTransfer(u, paid);
+    }
+
+    /// What can still be paid out right now: the pool, limited by what is left of this hour's cap.
+    function payableNow() public view returns (uint256) {
+        uint256 left = block.timestamp / 3600 == payoutHour ? HOURLY_PAYOUT_CAP - paidThisHour : HOURLY_PAYOUT_CAP;
+        uint256 pool = usdc.balanceOf(address(this));
+        return pool < left ? pool : left;
+    }
+
+    /// Starts a new hour's count when the hour changed, then returns payableNow().
+    function _room() private returns (uint256) {
+        uint256 h = block.timestamp / 3600;
+        if (h != payoutHour) {
+            payoutHour = h;
+            paidThisHour = 0;
+        }
+        return payableNow();
     }
 
     /// USDC left in the reward pool.

@@ -5,7 +5,7 @@
 // owns the demo feed. FarmCoop only follows it after its owner calls setOracle(demoFeed, …): see docs/DEPLOY.md.
 require("dotenv").config();
 const { ethers } = require("ethers");
-const { load } = require("./common");
+const { load, fujiProvider } = require("./common");
 
 const FEED = ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)", "function setPrice(int256)"];
 const COOP = [
@@ -58,7 +58,7 @@ async function main() {
   if (!d?.demoFeed) throw new Error("Chưa deploy DemoPriceFeed (deployments/fuji-gasless.json).");
   const arg = process.argv[2];
   if (!arg) throw new Error("Cách dùng: npm run drought -- <giá USD> | reset | liquidate");
-  const provider = new ethers.JsonRpcProvider(process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc");
+  const provider = await fujiProvider(ethers);
   const me = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
   if (arg === "liquidate") return liquidateAll(d, provider, me);
 
