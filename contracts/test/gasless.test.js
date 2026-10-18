@@ -103,6 +103,25 @@ describe("Gasless farm on Fuji (ERC-2771 fee manager)", () => {
     expect(await token.balanceOf(alice.address)).to.equal(usdc(1000));
   });
 
+  it("the fee manager's batch path uses up a request even when the game call fails, so it is paid for once", async () => {
+    const { alice, relayer, fwd, game, relay } = await deploy();
+    // harvest of a crop that does not exist: the inner call reverts
+    const { request } = await relay(alice, game, "harvest", [42], { dry: true });
+    // plain execute would revert and leave the request valid (payable again and again)
+    await expect(fwd.connect(relayer).execute(request)).to.be.reverted;
+    expect(await fwd.verify(request)).to.equal(true);
+    // executeBatch with a refund receiver: the tx succeeds, the event says the call failed, the nonce is used
+    const tx = await fwd.connect(relayer).executeBatch([request], relayer.address);
+    const rc = await tx.wait();
+    const ev = rc.logs.map((l) => { try { return fwd.interface.parseLog(l); } catch { return null; } }).find((x) => x?.name === "ExecutedForwardRequest");
+    expect(ev.args.signer).to.equal(alice.address);
+    expect(ev.args.success).to.equal(false);
+    expect(await fwd.verify(request)).to.equal(false);
+    // a second submission of the same signature runs nothing
+    const rc2 = await (await fwd.connect(relayer).executeBatch([request], relayer.address)).wait();
+    expect(rc2.logs.length).to.equal(0);
+  });
+
   it("nobody can act for another player", async () => {
     const { alice, bob, token, game, fwd, relay } = await deploy();
     await relay(alice, token, "faucet", []);

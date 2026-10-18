@@ -127,7 +127,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     await coop.connect(alice).depositCollateral(avax(10));
     await coop.connect(alice).borrow(usdc(20)); // $100 collateral, 75/20 = 3.75
     await items.connect(alice).startWatch(1004);
-    await time.increase(3 * DAY);
+    for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1004); } // daily check-in
     await items.connect(alice).claimBadge(1004, 0);
     // Lão nông
     await items.connect(alice).claimBadge(1006, 0);
@@ -289,7 +289,7 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     await items.connect(alice).startWatch(1003); // clock restarts today (gap + fewer shares)
     await time.increase(3 * DAY); // no check-ins in between
     expect(await items.canEarn(alice, 1003, 0)).to.equal(false);
-    // Hợp tác xã: borrow, start, repay everything, borrow 1 unit again later -> no badge
+    // Hợp tác xã: borrow, start, repay everything, borrow 1 unit again 3 days later (no check-ins) -> no badge
     await coop.connect(alice).depositCollateral(avax(10));
     await coop.connect(alice).borrow(usdc(20));
     await items.connect(alice).startWatch(1004);
@@ -298,10 +298,23 @@ describe("Kho đồ (FarmItems): produce, badges, cosmetics, barter market", () 
     await coop.connect(alice).borrow(1);
     expect(await items.canEarn(alice, 1004, 0)).to.equal(false);
     await expect(items.connect(alice).claimBadge(1004, 0)).to.be.revertedWithCustomError(items, "NotEligible");
-    // starting again on the new loan and leaving it alone for 3 days works
+    // with no debt a check-in is refused, so the clock cannot run over a repaid loan
+    await coop.connect(alice).repay(alice.address, usdc(1_000));
+    await expect(items.connect(alice).startWatch(1004)).to.be.revertedWithCustomError(items, "NotEligible");
+  });
+
+  it("nobody else can reset a player's Vay an toàn clock by repaying a little of their debt", async () => {
+    const { alice, bob, token, coop, items } = await deploy();
+    await coop.connect(alice).depositCollateral(avax(10));
+    await coop.connect(alice).borrow(usdc(20));
     await items.connect(alice).startWatch(1004);
-    await time.increase(3 * DAY);
+    for (let d = 0; d < 3; d++) {
+      await coop.connect(bob).repay(alice.address, 1); // griefing: 0.000001 USDC of alice's debt every day
+      await time.increase(DAY);
+      await items.connect(alice).startWatch(1004);
+    }
     await items.connect(alice).claimBadge(1004, 0);
+    expect(await items.balanceOf(alice, 1004)).to.equal(1n);
   });
 
   it("season trophies: owner only, at most 10 per season, once per player", async () => {

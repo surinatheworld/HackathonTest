@@ -121,21 +121,37 @@ async function build(env, config) {
   };
 }
 
+let building = null; // one build at a time per isolate (single-flight)
+
+/** Fresh data when it can, otherwise the last good copy (marked stale) rather than an error. */
 export async function village(env, config) {
   const fresh = (m) => m && Date.now() / 1000 - m.updatedAt < TTL_S;
   if (fresh(memo)) return memo;
   const cache = globalThis.caches?.default;
-  const key = "https://village.nongtrai.internal/v1";
+  const key = "https://village.nongtrai.internal/v2";
+  let cached = null;
   try {
     const hit = cache && (await cache.match(key));
-    if (hit) {
-      const m = await hit.json();
-      if (fresh(m)) return (memo = m);
-    }
+    if (hit) cached = await hit.json();
+    if (fresh(cached)) return (memo = cached);
   } catch {}
-  memo = await build(env, config);
+  if (!building) {
+    building = build(env, config)
+      .then(async (m) => {
+        memo = m;
+        try {
+          // kept a day so a Data API outage can fall back to it; freshness is checked by updatedAt
+          if (cache) await cache.put(key, new Response(JSON.stringify(m), { headers: { "cache-control": "max-age=86400" } }));
+        } catch {}
+        return m;
+      })
+      .finally(() => (building = null));
+  }
   try {
-    if (cache) await cache.put(key, new Response(JSON.stringify(memo), { headers: { "cache-control": `max-age=${TTL_S}` } }));
-  } catch {}
-  return memo;
+    return await building;
+  } catch (e) {
+    const last = memo || cached;
+    if (last) return { ...last, stale: true };
+    throw e;
+  }
 }

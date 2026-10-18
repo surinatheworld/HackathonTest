@@ -24,7 +24,6 @@ interface IFarmGameView {
 interface IFarmCoopView {
     function debtOf(address user) external view returns (uint256);
     function healthOf(address user) external view returns (uint256);
-    function positions(address user) external view returns (uint256 collateral, uint256 debt, uint64 last);
 }
 
 interface IFarmPondView {
@@ -50,7 +49,7 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
     uint256 public constant BADGE_SEED = 1001; // first deposit in Ruộng rau
     uint256 public constant BADGE_PATIENCE = 1002; // harvested a 90-day durian
     uint256 public constant BADGE_FISH = 1003; // kept liquidity in Ao cá for FISH_DAYS, checked in every day
-    uint256 public constant BADGE_SAFE = 1004; // kept one loan untouched at Hợp tác xã for SAFE_DAYS, health >= 1.5
+    uint256 public constant BADGE_SAFE = 1004; // borrowed with health >= 1.5 at every daily check-in for SAFE_DAYS
     uint256 public constant BADGE_DILIGENT = 1005; // watering streak >= STREAK_DAYS
     uint256 public constant BADGE_MASTER = 1006; // all five lesson badges
     uint256 public constant TROPHY = 1007; // top of a season, awarded by the owner, max 10 per season
@@ -87,7 +86,7 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
     mapping(address => uint64) public fishSeen; // last day the player checked in at Ao cá
     mapping(address => uint256) public fishShares; // pond shares at the start; holding fewer restarts the clock
     mapping(address => uint64) public safeSince;
-    mapping(address => uint64) public safeLoan; // FarmCoop position.last at the start: any repay/borrow/liquidation changes it
+    mapping(address => uint64) public safeSeen; // last day the player checked in at Hợp tác xã
     mapping(address => uint256) public hatOf;
     mapping(uint256 => uint256) public trophiesAwarded; // season => count
     mapping(uint256 => mapping(address => bool)) public trophyWinner;
@@ -287,10 +286,10 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
 
     // ---------- huy hiệu ----------
 
-    /// Start, or keep going, the clock for the badges that need time.
-    /// Ao cá: call it once every game day (a check-in). Missing a day, or holding fewer pond shares than at the
-    /// start, restarts the clock. Hợp tác xã: call it once; repaying, borrowing more, withdrawing collateral or
-    /// being liquidated changes the loan, and the clock no longer counts (call again to restart).
+    /// Start, or keep going, the clock for the badges that need time: call it once every game day (a check-in).
+    /// Missing a day restarts the clock. Ao cá also restarts if the player holds fewer pond shares than at the
+    /// start; Hợp tác xã needs an open loan with health >= 1.5 at every check-in. Only the player's own state
+    /// counts, so nobody else (e.g. by repaying a little of their debt) can reset it.
     function startWatch(uint256 badgeId) external {
         address u = _msgSender();
         uint64 d = today();
@@ -304,11 +303,8 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
             fishSeen[u] = d;
         } else if (badgeId == BADGE_SAFE) {
             if (coop.debtOf(u) == 0 || coop.healthOf(u) < SAFE_HEALTH_BPS) revert NotEligible();
-            (,, uint64 last) = coop.positions(u);
-            if (safeSince[u] == 0 || last != safeLoan[u]) {
-                safeSince[u] = d;
-                safeLoan[u] = last;
-            }
+            if (safeSince[u] == 0 || d > safeSeen[u] + 1) safeSince[u] = d;
+            safeSeen[u] = d;
         } else {
             revert NotEligible();
         }
@@ -332,8 +328,8 @@ contract FarmItems is ERC1155, ERC2771Context, ReentrancyGuard {
         }
         if (badgeId == BADGE_SAFE) {
             uint64 s = safeSince[u];
-            (,, uint64 last) = coop.positions(u);
-            return s != 0 && today() >= s + SAFE_DAYS && last == safeLoan[u] && coop.debtOf(u) > 0
+            uint64 d = today();
+            return s != 0 && d >= s + SAFE_DAYS && d <= safeSeen[u] + 1 && coop.debtOf(u) > 0
                 && coop.healthOf(u) >= SAFE_HEALTH_BPS;
         }
         if (badgeId == BADGE_DILIGENT) {

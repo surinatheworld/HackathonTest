@@ -32,7 +32,8 @@
     "multisig:deploy": "hardhat run scripts/deploy-multisig.js --network fuji",
     "multisig:handover": "hardhat run scripts/multisig-handover.js --network fuji",
     "test:mainnet-fork": "node -e \"process.env.FORK_MAINNET=1;require('child_process').execFileSync(process.execPath,[require.resolve('hardhat/internal/cli/bootstrap'),'test','test/fork/mainnet.fork.js'],{stdio:'inherit',env:process.env})\"",
-    "migrate:yield": "hardhat run scripts/migrate-yield.js --network fuji"
+    "migrate:yield": "hardhat run scripts/migrate-yield.js --network fuji",
+    "top-up:quests": "node scripts/top-up-quests.js"
   },
   "license": "MIT",
   "type": "commonjs",

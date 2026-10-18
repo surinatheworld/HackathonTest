@@ -60,6 +60,7 @@
       "function canEarn(address,uint256,uint256) view returns (bool)",
       "function fishSince(address) view returns (uint64)",
       "function fishSeen(address) view returns (uint64)",
+      "function safeSeen(address) view returns (uint64)",
       "function safeSince(address) view returns (uint64)",
       "function feePerUnit() view returns (uint256)",
       "function feePool() view returns (uint256)",
@@ -85,7 +86,7 @@
       "error AllDone()",
       "error RewardPoolEmpty(uint256 available, uint256 needed)",
     ],
-    forwarder: ["function nonces(address) view returns (uint256)"],
+    forwarder: ["function nonces(address) view returns (uint256)", "event ExecutedForwardRequest(address indexed signer, uint256 nonce, bool success)"],
     butler: [
       "function owner() view returns (address)",
       "function agent() view returns (address)",
@@ -162,7 +163,7 @@
     { ch: 4, title: "Hái trộm", how: "Hỏi bạn bè địa chỉ ví, hái trộm điểm chín của họ ở Vườn bác Tư.", zone: "neighbor", reward: 30 },
     { ch: 4, title: "Thuê người giữ vườn", how: "Ở Vườn bác Tư, bấm Thuê người giữ vườn.", zone: "neighbor", reward: 30 },
     { ch: 5, title: "Nông dân chăm chỉ", how: "Tưới cây 7 ngày liên tục, rồi nhận huy hiệu trong Kho đồ.", zone: "inventory", reward: 50 },
-    { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ nguyên khoản vay 3 ngày với hệ số an toàn từ 1,5, rồi nhận huy hiệu.", zone: "inventory", reward: 80 },
+    { ch: 5, title: "Vay an toàn", how: "Vay ở Hợp tác xã, giữ hệ số an toàn từ 1,5 và điểm danh mỗi ngày game, đủ 3 ngày thì nhận huy hiệu.", zone: "inventory", reward: 80 },
     { ch: 5, title: "Kiên nhẫn", how: "Thu hoạch một cây sầu riêng 90 ngày (khoảng 90 phút), rồi nhận huy hiệu.", zone: "inventory", reward: 100 },
     { ch: 5, title: "Lão nông", how: "Có đủ 5 huy hiệu bài học, rồi nhận huy hiệu Lão nông.", zone: "inventory", reward: 200 },
   ];
@@ -323,7 +324,7 @@
     1001: { name: "Hạt giống đầu tiên", icon: "seed", rarity: "huy hiệu", kind: "badge", desc: "Gửi tiền vào Ruộng rau lần đầu.", lesson: "Gửi tiết kiệm" },
     1002: { name: "Kiên nhẫn", icon: "hourglass", rarity: "huy hiệu", kind: "badge", desc: "Thu hoạch một cây sầu riêng 90 ngày.", lesson: "Khóa càng lâu, lãi càng cao" },
     1003: { name: "Người nuôi cá", icon: "fish", rarity: "huy hiệu", kind: "badge", desc: "Giữ cá trong Ao cá 3 ngày, mỗi ngày game bấm Điểm danh một lần.", lesson: "Góp thanh khoản" },
-    1004: { name: "Vay an toàn", icon: "shield", rarity: "huy hiệu", kind: "badge", desc: "Giữ nguyên một khoản vay ở Hợp tác xã 3 ngày (không trả, không vay thêm), hệ số an toàn từ 1,5 trở lên.", lesson: "Vay có trách nhiệm" },
+    1004: { name: "Vay an toàn", icon: "shield", rarity: "huy hiệu", kind: "badge", desc: "Đang vay ở Hợp tác xã với hệ số an toàn từ 1,5, mỗi ngày game bấm Điểm danh một lần, đủ 3 ngày.", lesson: "Vay có trách nhiệm" },
     1005: { name: "Nông dân chăm chỉ", icon: "can", rarity: "huy hiệu", kind: "badge", desc: "Tưới cây 7 ngày liên tục.", lesson: "Kiên trì" },
     1006: { name: "Lão nông", icon: "crown", rarity: "huyền thoại", kind: "badge", desc: "Có đủ 5 huy hiệu trên.", lesson: "Tốt nghiệp DeFi cơ bản" },
     1007: { name: "Cúp mùa vụ", icon: "trophy", rarity: "huyền thoại", kind: "badge", desc: "Top 10 cuối mùa. Mỗi mùa chỉ có 10 cúp." },
@@ -347,10 +348,11 @@
   async function readItems(a, crops) {
     if (!itemsR) return null;
     const harvested = crops.filter((cr) => cr.status === "Harvested");
-    const [inv, points, hat, today, fishSince, safeSince, feePerUnit, claimed, fishSeen] = await Promise.all([
+    const [inv, points, hat, today, fishSince, safeSince, feePerUnit, claimed, fishSeen, safeSeen] = await Promise.all([
       itemsR.itemsOf(a), itemsR.pointsOf(a), itemsR.hatOf(a), itemsR.today(), itemsR.fishSince(a), itemsR.safeSince(a), itemsR.feePerUnit(),
       Promise.all(harvested.map((cr) => itemsR.claimedCrop(cr.id))),
       itemsR.fishSeen(a),
+      itemsR.safeSeen(a),
     ]);
     const durian = harvested.find((cr) => cr.tier === 2);
     const can = await Promise.all(CH.BADGES.slice(0, 6).map((b) => itemsR.canEarn(a, b, b === 1002 && durian ? durian.id : 0)));
@@ -366,7 +368,7 @@
       unclaimed: harvested.filter((_, i) => !claimed[i]).map((cr) => cr.id),
       durianCrop: durian ? durian.id : 0,
       badges: CH.BADGES.map((b, i) => ({ id: b, ...CATALOG[b], owned: owns(b), can: i < 6 ? can[i] : false })),
-      fishSince: Number(fishSince), safeSince: Number(safeSince), fishSeen: Number(fishSeen),
+      fishSince: Number(fishSince), safeSince: Number(safeSince), fishSeen: Number(fishSeen), safeSeen: Number(safeSeen),
     };
   }
 
@@ -484,6 +486,15 @@
       const rc = await Promise.any(hashes.map((h) => rp.waitForTransaction(h, 1, 120_000).then((x) => x || Promise.reject()))).catch(() => null);
       if (rc) CH.lastTx.hash = hash = rc.hash;
       if (!rc || rc.status !== 1) throw new Error("Giao dịch thất bại trên chain: " + hash);
+      // Gasless sends go through the forwarder's batch path, whose receipt succeeds even if the game call failed:
+      // the forwarder's ExecutedForwardRequest event says whether it ran.
+      if (CH.lastPath === "gasless") {
+        const fwdI = new E.Interface(ABI.forwarder);
+        const ev = rc.logs.filter((l) => l.address.toLowerCase() === c.forwarder.toLowerCase())
+          .map((l) => { try { return fwdI.parseLog(l); } catch { return null; } })
+          .find((x) => x?.name === "ExecutedForwardRequest" && x.args.signer.toLowerCase() === CH.account.toLowerCase());
+        if (!ev || !ev.args.success) throw new Error("Giao dịch thất bại trên chain (trạng thái đã đổi ngay trước khi chạy), thử lại nhé: " + hash);
+      }
       await recordTx(rc, CH.lastPath, Math.round(performance.now() - sentAt)).catch(() => {});
       return rc;
     } finally {

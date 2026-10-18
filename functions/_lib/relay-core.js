@@ -5,6 +5,8 @@ import { ethers } from "./ethers.min.js";
 
 const FORWARDER_ABI = [
   "function execute((address from, address to, uint256 value, uint256 gas, uint48 deadline, bytes data, bytes signature) request) payable",
+  "function executeBatch((address from, address to, uint256 value, uint256 gas, uint48 deadline, bytes data, bytes signature)[] requests, address refundReceiver) payable",
+  "event ExecutedForwardRequest(address indexed signer, uint256 nonce, bool success)",
   "function verify((address from, address to, uint256 value, uint256 gas, uint48 deadline, bytes data, bytes signature) request) view returns (bool)",
 ];
 const GAME_ABI = [
@@ -95,7 +97,11 @@ const POND_ABI = [
   "error EmptyPool()",
 ];
 const MAX_GAS = 800_000n;
-const MAX_DEADLINE_S = 3600;
+const MAX_DEADLINE_S = 900; // the game signs with a 10-minute deadline
+const MAX_DATA_BYTES = 2048; // the biggest game call (makeOffer with 4 legs) is well under 1 KB
+// Spending cap across all players, per hour, so a flood of fresh wallets cannot empty the pool while Fuji gas is
+// expensive. Counted from receipts; best effort like the rate limits. RELAY_HOURLY_BUDGET_AVAX overrides it.
+const HOURLY_BUDGET = "0.02";
 
 const gameIface = new ethers.Interface(GAME_ABI);
 const tokenIface = new ethers.Interface(TOKEN_ABI);
@@ -151,6 +157,7 @@ const json = (status, body) =>
 // with the window. Limits per IP stay loose because a whole classroom can share one IP.
 const LIMITS = {
   ip: [{ n: 300, s: 60 }, { n: 10_000, s: 86_400 }],
+  status: [{ n: 120, s: 60 }], // GET endpoints: each one fans out to several RPC / Data API calls
   wallet: [{ n: 40, s: 60 }, { n: 500, s: 86_400 }],
 };
 const counters = new Map(); // key -> { n, exp }
@@ -224,19 +231,45 @@ async function pickWallet(env, provider, from) {
   return null;
 }
 
+export const statusLimited = (ip) => limited("status", ip);
+
+// Wei the pool spent this hour (all players). Same storage as the rate limits.
+async function spentThisHour(add = 0n) {
+  const slot = Math.floor(Date.now() / 3_600_000);
+  const key = `spend:${slot}`;
+  let wei = BigInt(counters.get(key)?.n || 0) + add;
+  try {
+    const cache = globalThis.caches?.default;
+    if (cache) {
+      const url = "https://rate-limit.nongtrai.internal/" + key;
+      const hit = await cache.match(url);
+      const cached = hit ? BigInt((await hit.text()) || "0") : 0n;
+      if (cached + add > wei) wei = cached + add;
+      if (add) await cache.put(url, new Response(wei.toString(), { headers: { "cache-control": "max-age=3600" } }));
+    }
+  } catch {}
+  counters.set(key, { n: wei.toString(), exp: (slot + 1) * 3600 });
+  return wei;
+}
+
+let statusMemo = null; // { at, body }: GET /api/relay is cached for a few seconds
+
 export async function relayStatus(env, config) {
   if (!env.RELAYER_PRIVATE_KEY) return json(503, { ready: false, code: "relay_disabled", reason: "RELAYER_PRIVATE_KEY chưa được cấu hình." });
+  if (statusMemo && Date.now() - statusMemo.at < 15_000) return json(200, statusMemo.body);
   const provider = new ethers.JsonRpcProvider(env.FUJI_RPC_URL || config.rpc, config.chainId, { staticNetwork: true });
   const addrs = relayerKeys(env).map((k) => new ethers.Wallet(k).address);
   const bals = await Promise.all(addrs.map((a) => provider.getBalance(a)));
   const total = bals.reduce((a, b) => a + b, 0n);
-  return json(200, {
+  const body = {
     ready: bals.some((b) => b >= MIN_BALANCE),
     relayer: addrs[0],
     balance: ethers.formatEther(total),
     pool: addrs.map((a, i) => ({ address: a, balance: ethers.formatEther(bals[i]), active: bals[i] >= MIN_BALANCE })),
     forwarder: config.forwarder,
-  });
+  };
+  statusMemo = { at: Date.now(), body };
+  return json(200, body);
 }
 
 const errText = (e) => [e?.shortMessage, e?.message, e?.error?.message, e?.info?.error?.message].filter(Boolean).join(" | ");
@@ -263,6 +296,7 @@ export async function relay(body, env, config, meta = {}) {
     return json(400, { error: "Request không hợp lệ." });
   }
   if (req.value !== 0n) return json(400, { error: "Không hỗ trợ gửi kèm tiền." });
+  if (ethers.dataLength(req.data) > MAX_DATA_BYTES) return json(400, { error: "Dữ liệu giao dịch quá lớn." });
   if (req.gas > MAX_GAS) return json(400, { error: "Gas vượt hạn mức của fee manager." });
   const now = Math.floor(Date.now() / 1000);
   if (req.deadline < now || req.deadline > now + MAX_DEADLINE_S) return json(400, { error: "Hạn của request không hợp lệ." });
@@ -283,6 +317,9 @@ export async function relay(body, env, config, meta = {}) {
   } catch (e) {
     return json(422, { error: "Giao dịch sẽ thất bại: " + explain(e) });
   }
+  const budget = ethers.parseEther(String(env.RELAY_HOURLY_BUDGET_AVAX || HOURLY_BUDGET));
+  if ((await spentThisHour()) >= budget)
+    return json(503, { error: "Fee manager đã dùng hết ngân sách gas của giờ này, thử lại sau ít phút.", code: "relay_budget", notSent: true });
   const wallet = await pickWallet(env, provider, req.from);
   if (!wallet) return json(503, { error: "Ví trả gas của fee manager đã hết AVAX, đội đang nạp thêm.", code: "relay_empty", notSent: true });
   const fwd = reader.connect(wallet);
@@ -300,7 +337,21 @@ export async function relay(body, env, config, meta = {}) {
     }
     return null;
   };
-  const done = (rc) => json(200, { hash: rc.hash, relayer: wallet.address, status: rc.status });
+  // Sent through executeBatch with a refund receiver: the forwarder then uses up the request's nonce even when the
+  // game call itself fails, so one signed request is paid for at most once. The receipt succeeds either way, so the
+  // game call's own result is read from the forwarder's ExecutedForwardRequest event.
+  const done = async (rc) => {
+    await spentThisHour((rc.gasUsed || 0n) * (rc.gasPrice || 0n)).catch(() => {});
+    let ok = false;
+    for (const log of rc.logs || []) {
+      if (log.address.toLowerCase() !== config.forwarder.toLowerCase()) continue;
+      const ev = (() => { try { return reader.interface.parseLog(log); } catch { return null; } })();
+      if (ev?.name === "ExecutedForwardRequest" && ev.args.signer.toLowerCase() === req.from.toLowerCase()) ok = ev.args.success;
+    }
+    const status = rc.status === 1 && ok ? 1 : 0;
+    if (!status) return json(200, { hash: rc.hash, relayer: wallet.address, status, error: "Giao dịch thất bại trên chain (trạng thái đã đổi sau khi kiểm tra)." });
+    return json(200, { hash: rc.hash, relayer: wallet.address, status });
+  };
   let lastError = null;
   for (let attempt = 0; attempt < 6; attempt++) {
     if (attempt) {
@@ -312,7 +363,7 @@ export async function relay(body, env, config, meta = {}) {
     let tx;
     try {
       const nonce = await provider.getTransactionCount(wallet.address, "latest");
-      tx = await fwd.execute(req, { gasLimit: req.gas + 150_000n, nonce });
+      tx = await fwd.executeBatch([req], wallet.address, { gasLimit: req.gas + 150_000n, nonce });
       sent.push(tx.hash);
     } catch (e) {
       lastError = e;

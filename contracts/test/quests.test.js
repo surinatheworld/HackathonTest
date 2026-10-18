@@ -124,7 +124,7 @@ describe("Nhiệm vụ (FarmQuests): 18 quests, easy to hard, checked on-chain",
     await coop.connect(alice).borrow(usdc(20)); // health 3.75 >= 1.5
     await items.connect(alice).startWatch(1004);
     await items.connect(alice).startWatch(1003);
-    for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); } // Ao cá check-ins
+    for (let d = 0; d < 3; d++) { await time.increase(DAY); await items.connect(alice).startWatch(1003); await items.connect(alice).startWatch(1004); } // daily check-ins
     await items.connect(alice).claimBadge(1004, 0);
     await items.connect(alice).claimBadge(1003, 0);
     await done(15);
